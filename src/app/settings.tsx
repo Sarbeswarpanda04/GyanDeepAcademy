@@ -1,5 +1,5 @@
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   Alert,
   ScrollView,
@@ -22,7 +22,17 @@ const MUTED = "#9DB1BE";
 const ICON = "#526D85";
 const RED = "#D62828";
 
-const groups = [
+type IconName = React.ComponentProps<typeof Feather>["name"];
+
+type SettingsGroup = {
+  title: string;
+  items: {
+    icon: IconName;
+    label: string;
+  }[];
+};
+
+const groups: SettingsGroup[] = [
   {
     title: "INSTITUTE",
     items: [
@@ -56,30 +66,30 @@ const groups = [
       { icon: "help-circle", label: "Help & support" },
     ],
   },
-] as const;
+];
 
 export default function SettingsScreen() {
   const [instituteName, setInstituteName] = useState("GyanDeep Academy");
 
   const loadInstitute = useCallback(async () => {
     try {
-      const { data: authData, error: authError } =
-        await supabase.auth.getUser();
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
 
       if (authError) throw authError;
 
-      if (!authData.user) {
+      if (!user) {
         router.replace("/login");
         return;
       }
 
-      // Resolve the current user's institute membership.
-      // Do not assume every signed-in user is an owner.
       const { data: membership, error: membershipError } =
         await supabase
           .from("institute_members")
           .select("institute_id")
-          .eq("user_id", authData.user.id)
+          .eq("user_id", user.id)
           .limit(1)
           .maybeSingle();
 
@@ -98,7 +108,7 @@ export default function SettingsScreen() {
 
       if (error) throw error;
 
-      if (data?.name) setInstituteName(data.name);
+      setInstituteName(data?.name?.trim() || "GyanDeep Academy");
     } catch (error) {
       console.error("Could not load institute details:", error);
     }
@@ -117,26 +127,44 @@ export default function SettingsScreen() {
         text: "Log out",
         style: "destructive",
         onPress: async () => {
-          const { error } = await supabase.auth.signOut();
+          try {
+            const { error } = await supabase.auth.signOut();
 
-          if (error) {
-            Alert.alert("Logout failed", error.message);
-            return;
+            if (error) throw error;
+
+            router.replace("/login");
+          } catch (error) {
+            console.error("Logout failed:", error);
+            Alert.alert(
+              "Logout failed",
+              "Unable to log out. Please try again."
+            );
           }
-
-          router.replace("/login");
         },
       },
     ]);
   }
 
   function openItem(label: string) {
-    if (label === "Institute profile") {
-      router.push("/institute-profile");
-      return;
-    }
+    switch (label) {
+      case "Institute profile":
+        router.push("/institute-profile");
+        break;
 
-    Alert.alert(label, `${label} screen will be implemented next.`);
+      case "Classes":
+        router.push("/classes");
+        break;
+
+      case "Batches":
+        router.push("/batches");
+        break;
+
+      default:
+        Alert.alert(
+          label,
+          `${label} screen will be implemented next.`
+        );
+    }
   }
 
   return (
@@ -170,18 +198,15 @@ export default function SettingsScreen() {
                 key={item.label}
                 style={[
                   styles.row,
-                  index === group.items.length - 1 &&
-                    styles.lastRow,
+                  index === group.items.length - 1 && styles.lastRow,
                 ]}
                 activeOpacity={0.7}
                 onPress={() => openItem(item.label)}
+                accessibilityRole="button"
+                accessibilityLabel={item.label}
               >
                 <View style={styles.rowIconBox}>
-                  <Feather
-                    name={item.icon}
-                    size={19}
-                    color={ICON}
-                  />
+                  <Feather name={item.icon} size={19} color={ICON} />
                 </View>
 
                 <Text style={styles.rowLabel}>{item.label}</Text>
@@ -200,17 +225,20 @@ export default function SettingsScreen() {
           style={styles.logoutRow}
           onPress={handleLogout}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Log out"
         >
           <Feather name="log-out" size={21} color={RED} />
           <Text style={styles.logoutLabel}>Logout</Text>
-          <View style={{ flex: 1 }} />
+          <View style={styles.logoutSpacer} />
           <Feather name="chevron-right" size={20} color={RED} />
         </TouchableOpacity>
 
-        <Text style={styles.version}>GyanDeep Academy · Version 1.0.0</Text>
+        <Text style={styles.version}>
+          {instituteName} · Version 1.0.0
+        </Text>
       </ScrollView>
 
-      {/* Shared floating six-item navigation */}
       <FloatingTabBar />
     </View>
   );
@@ -301,6 +329,9 @@ const styles = StyleSheet.create({
     color: RED,
     fontSize: 15,
     fontWeight: "700",
+  },
+  logoutSpacer: {
+    flex: 1,
   },
   version: {
     color: MUTED,

@@ -37,9 +37,16 @@ function openSection(title: string, route?: string) {
 export default function DashboardScreen() {
   const { width } = useWindowDimensions();
 
-  const horizontalPadding = 18;
-  const gap = 12;
-  const tileWidth = (width - horizontalPadding * 2 - gap * 2) / 3;
+  const contentPadding = 12;
+  const sectionPadding = 10;
+  const sectionBorder = 1;
+  const tileGap = 8;
+  const tileAreaWidth =
+    width -
+    contentPadding * 2 -
+    (sectionPadding + sectionBorder) * 2;
+  const tileWidth = (tileAreaWidth - tileGap * 2) / 3;
+  const quickTileWidth = (tileAreaWidth - tileGap * 3) / 4;
 
   const quickActions: {
     title: string;
@@ -62,8 +69,22 @@ export default function DashboardScreen() {
       iconColor: "#3E627A",
     },
     {
+      title: "Create class",
+      icon: "book-open",
+      route: "/classes",
+      color: "#EFF2F4",
+      iconColor: "#3E627A",
+    },
+    {
       title: "Exam/Test",
       icon: "clipboard",
+      color: "#EFF2F4",
+      iconColor: "#3E627A",
+    },
+    {
+      title: "Create subject",
+      icon: "book",
+      route: "/subjects",
       color: "#EFF2F4",
       iconColor: "#3E627A",
     },
@@ -230,14 +251,15 @@ export default function DashboardScreen() {
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Quick actions</Text>
 
-          <View style={styles.tilesRow}>
+          <View style={styles.quickActionsRow}>
             {quickActions.map((item) => (
               <TouchableOpacity
                 key={item.title}
                 style={[
                   styles.tile,
+                  styles.quickActionTile,
                   {
-                    width: tileWidth,
+                    width: quickTileWidth,
                     backgroundColor: item.color,
                   },
                 ]}
@@ -247,13 +269,16 @@ export default function DashboardScreen() {
                 <View
                   style={[
                     styles.tileIcon,
+                    styles.quickActionIcon,
                     { backgroundColor: item.iconColor },
                   ]}
                 >
-                  <Feather name={item.icon} size={31} color={WHITE} />
+                  <Feather name={item.icon} size={17} color={WHITE} />
                 </View>
 
-                <Text style={styles.tileTitle}>{item.title}</Text>
+                <Text style={[styles.tileTitle, styles.quickActionTitle]}>
+                  {item.title}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -414,9 +439,9 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     borderWidth: 1,
     borderColor: "#E4EBF0",
-    paddingHorizontal: 12,
-    paddingTop: 16,
-    paddingBottom: 12,
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    paddingBottom: 10,
   },
   sectionTitle: {
     color: NAVY,
@@ -425,10 +450,11 @@ const styles = StyleSheet.create({
     marginBottom: 17,
   },
 
-  tilesRow: {
+  quickActionsRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
-    gap: 8,
+    rowGap: 8,
   },
   tilesGrid: {
     flexDirection: "row",
@@ -444,6 +470,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 3,
     paddingVertical: 12,
   },
+  quickActionTile: {
+    flexShrink: 0,
+    minHeight: 98,
+    paddingHorizontal: 2,
+    paddingVertical: 8,
+    borderRadius: 16,
+  },
   manageTile: {
     minHeight: 118,
   },
@@ -455,12 +488,22 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 12,
   },
+  quickActionIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 13,
+    marginBottom: 8,
+  },
   tileTitle: {
     color: NAVY,
     fontSize: 12,
     lineHeight: 16,
     fontWeight: "800",
     textAlign: "center",
+  },
+  quickActionTitle: {
+    fontSize: 10,
+    lineHeight: 13,
   },
   footer: {
     color: MUTED,

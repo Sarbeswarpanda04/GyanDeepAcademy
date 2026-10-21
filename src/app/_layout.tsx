@@ -14,6 +14,8 @@ export default function RootLayout() {
       <Stack.Screen name="fees" />
       <Stack.Screen name="settings" />
       <Stack.Screen name="institute-profile" />
+      <Stack.Screen name="classes" />
+      <Stack.Screen name="batches" />
     </Stack>
   );
 }
