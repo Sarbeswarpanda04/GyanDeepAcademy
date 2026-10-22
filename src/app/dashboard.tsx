@@ -65,6 +65,7 @@ export default function DashboardScreen() {
     {
       title: "Create batch",
       icon: "layers",
+      route: "/batches",
       color: "#EFF2F4",
       iconColor: "#3E627A",
     },

@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Animated,
   Keyboard,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -545,7 +546,7 @@ export default function SubjectsScreen() {
             </Text>
           ) : (
             <>
-              {classSubjects.slice(0, 4).map((subject) => (
+              {classSubjects.map((subject) => (
                 <View
                   key={subject.id}
                   style={[
@@ -555,7 +556,7 @@ export default function SubjectsScreen() {
                 >
                   <Text
                     style={[styles.chipText, { color: palette.fg }]}
-                    numberOfLines={1}
+                    numberOfLines={2}
                   >
                     {subject.name}
                   </Text>
@@ -582,12 +583,6 @@ export default function SubjectsScreen() {
                   )}
                 </View>
               ))}
-
-              {classSubjects.length > 4 && (
-                <Text style={styles.moreText}>
-                  +{classSubjects.length - 4} more
-                </Text>
-              )}
             </>
           )}
         </View>
@@ -728,15 +723,7 @@ export default function SubjectsScreen() {
         ) : (
           <View style={styles.grid}>
             {classes.map((item, index) => (
-              <View
-                key={item.id}
-                style={[
-                  styles.gridItem,
-                  index % 2 === 0
-                    ? styles.gridItemLeft
-                    : styles.gridItemRight,
-                ]}
-              >
+              <View key={item.id} style={styles.gridItem}>
                 {renderClassCard(item, index)}
               </View>
             ))}
@@ -770,7 +757,11 @@ export default function SubjectsScreen() {
         statusBarTranslucent={Platform.OS === "android"}
         onRequestClose={() => closeForm()}
       >
-        <View style={styles.modalRoot}>
+        <KeyboardAvoidingView
+          style={styles.modalRoot}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={0}
+        >
           <Pressable
             style={styles.modalBackdrop}
             onPress={() => closeForm()}
@@ -782,99 +773,107 @@ export default function SubjectsScreen() {
               {
                 opacity: formOpacity,
                 transform: [{ translateY: formTranslate }],
+                maxHeight: "90%",
               },
             ]}
           >
-            <View style={styles.sheetHandle} />
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.sheetContent}
+            >
+              <View style={styles.sheetHandle} />
 
-            <View style={styles.sheetHeader}>
-              <View style={styles.sheetIcon}>
-                <Feather name="book-open" size={23} color={C.primary} />
+              <View style={styles.sheetHeader}>
+                <View style={styles.sheetIcon}>
+                  <Feather name="book-open" size={23} color={C.primary} />
+                </View>
+
+                <Pressable
+                  onPress={() => closeForm()}
+                  disabled={saving}
+                  style={styles.sheetClose}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close form"
+                >
+                  <Feather name="x" size={21} color={C.secondary} />
+                </Pressable>
               </View>
 
+              <Text style={styles.sheetTitle}>Add New Subject</Text>
+              <Text style={styles.sheetSubtitle}>
+                Add a subject to{" "}
+                <Text style={styles.selectedClass}>
+                  {selectedClass?.name ?? "your class"}
+                </Text>
+                .
+              </Text>
+
+              <Text style={styles.inputLabel}>Subject Name</Text>
+
+              <View style={styles.inputWrapper}>
+                <Feather name="book" size={18} color={C.primary} />
+                <TextInput
+                  value={subjectName}
+                  onChangeText={setSubjectName}
+                  placeholder="e.g. Mathematics"
+                  placeholderTextColor={C.muted}
+                  style={styles.textInput}
+                  maxLength={100}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  editable={!saving}
+                  onSubmitEditing={() => void addSubject()}
+                />
+                {subjectName.length > 0 && (
+                  <Pressable
+                    onPress={() => setSubjectName("")}
+                    hitSlop={8}
+                    accessibilityLabel="Clear subject name"
+                  >
+                    <Feather name="x-circle" size={17} color={C.muted} />
+                  </Pressable>
+                )}
+              </View>
+
+              <Text style={styles.characterCount}>
+                {subjectName.length}/100 characters
+              </Text>
+
               <Pressable
+                style={[
+                  styles.saveButton,
+                  saving && styles.disabledButton,
+                ]}
+                onPress={() => void addSubject()}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <>
+                    <Feather
+                      name="check-circle"
+                      size={18}
+                      color="#FFFFFF"
+                    />
+                    <Text style={styles.saveButtonText}>Save Subject</Text>
+                  </>
+                )}
+              </Pressable>
+
+              <Pressable
+                style={styles.cancelButton}
                 onPress={() => closeForm()}
                 disabled={saving}
-                style={styles.sheetClose}
-                accessibilityRole="button"
-                accessibilityLabel="Close form"
               >
-                <Feather name="x" size={21} color={C.secondary} />
+                <Text style={styles.cancelButtonText}>Cancel</Text>
               </Pressable>
-            </View>
-
-            <Text style={styles.sheetTitle}>Add New Subject</Text>
-            <Text style={styles.sheetSubtitle}>
-              Add a subject to{" "}
-              <Text style={styles.selectedClass}>
-                {selectedClass?.name ?? "your class"}
-              </Text>
-              .
-            </Text>
-
-            <Text style={styles.inputLabel}>Subject Name</Text>
-
-            <View style={styles.inputWrapper}>
-              <Feather name="book" size={18} color={C.primary} />
-              <TextInput
-                value={subjectName}
-                onChangeText={setSubjectName}
-                placeholder="e.g. Mathematics"
-                placeholderTextColor={C.muted}
-                style={styles.textInput}
-                maxLength={100}
-                autoCapitalize="words"
-                autoCorrect={false}
-                returnKeyType="done"
-                editable={!saving}
-                onSubmitEditing={() => void addSubject()}
-              />
-              {subjectName.length > 0 && (
-                <Pressable
-                  onPress={() => setSubjectName("")}
-                  hitSlop={8}
-                  accessibilityLabel="Clear subject name"
-                >
-                  <Feather name="x-circle" size={17} color={C.muted} />
-                </Pressable>
-              )}
-            </View>
-
-            <Text style={styles.characterCount}>
-              {subjectName.length}/100 characters
-            </Text>
-
-            <Pressable
-              style={[
-                styles.saveButton,
-                saving && styles.disabledButton,
-              ]}
-              onPress={() => void addSubject()}
-              disabled={saving}
-            >
-              {saving ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <>
-                  <Feather
-                    name="check-circle"
-                    size={18}
-                    color="#FFFFFF"
-                  />
-                  <Text style={styles.saveButtonText}>Save Subject</Text>
-                </>
-              )}
-            </Pressable>
-
-            <Pressable
-              style={styles.cancelButton}
-              onPress={() => closeForm()}
-              disabled={saving}
-            >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </Pressable>
+            </ScrollView>
           </Animated.View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <AppAlert
@@ -1154,15 +1153,9 @@ const styles = StyleSheet.create({
     marginHorizontal: -5,
   },
   gridItem: {
-    width: "50%",
-    paddingHorizontal: 5,
+    width: "100%",
+    paddingHorizontal: 0,
     marginBottom: 10,
-  },
-  gridItemLeft: {
-    paddingRight: 6,
-  },
-  gridItemRight: {
-    paddingLeft: 6,
   },
   classCard: {
     borderRadius: 20,
@@ -1236,23 +1229,24 @@ const styles = StyleSheet.create({
   chipContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 5,
   },
   chip: {
+    width: "23%",
+    height: 48,
     flexDirection: "row",
     alignItems: "center",
-    maxWidth: "100%",
+    justifyContent: "center",
     borderRadius: 8,
-    paddingLeft: 7,
-    paddingRight: 5,
-    paddingVertical: 5,
-    gap: 4,
+    paddingHorizontal: 4,
   },
   chipText: {
     flexShrink: 1,
     fontSize: 10,
+    lineHeight: 12,
     fontWeight: "700",
+    textAlign: "center",
   },
   chipRemove: {
     alignItems: "center",
@@ -1264,13 +1258,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: C.muted,
     lineHeight: 15,
-  },
-  moreText: {
-    fontSize: 10,
-    color: C.primaryDark,
-    fontWeight: "700",
-    paddingVertical: 4,
-    paddingHorizontal: 3,
   },
   loadingBox: {
     minHeight: 200,
@@ -1382,6 +1369,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingTop: 12,
     paddingBottom: Platform.OS === "ios" ? 34 : 25,
+  },
+  sheetContent: {
+    flexGrow: 1,
   },
   sheetHandle: {
     alignSelf: "center",
