@@ -1,7 +1,8 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
@@ -77,12 +78,36 @@ export default function ClassesScreen() {
   const [editingClass, setEditingClass] = useState<ClassItem | null>(null);
 
   const [menuClass, setMenuClass] = useState<ClassItem | null>(null);
+  const [menuPosition, setMenuPosition] = useState({ left: 8, top: 8 });
+  const menuAnchorsRef = useRef(new Map<string, View>());
   const [confirmAction, setConfirmAction] =
     useState<ConfirmAction>(null);
   const [confirmClass, setConfirmClass] = useState<ClassItem | null>(null);
 
   const activeClasses = classes.filter((item) => item.is_active);
   const displayedClasses = showInactive ? classes : activeClasses;
+
+  function openClassMenu(item: ClassItem) {
+    menuAnchorsRef.current
+      .get(item.id)
+      ?.measureInWindow((x, y, width, height) => {
+        const menuWidth = 210;
+        const menuHeight = 122;
+        const window = Dimensions.get("window");
+        const left = Math.max(
+          8,
+          Math.min(x + width - menuWidth, window.width - menuWidth - 8),
+        );
+        const belowTop = y + height + 4;
+        const top =
+          belowTop + menuHeight <= window.height - insets.bottom - 8
+            ? belowTop
+            : Math.max(insets.top + 8, y - menuHeight - 4);
+
+        setMenuPosition({ left, top });
+        setMenuClass(item);
+      });
+  }
 
   const loadClasses = useCallback(async () => {
     setLoading(true);
@@ -377,13 +402,25 @@ export default function ClassesScreen() {
           <Feather name="edit-2" size={22} color={ICON} />
         </TouchableOpacity>
 
-        <TouchableOpacity
+        <View
+          ref={(node) => {
+            if (node) {
+              menuAnchorsRef.current.set(item.id, node);
+            } else {
+              menuAnchorsRef.current.delete(item.id);
+            }
+          }}
+          collapsable={false}
           style={styles.cardAction}
-          accessibilityLabel={`More actions for ${item.name}`}
-          onPress={() => setMenuClass(item)}
         >
-          <Feather name="more-vertical" size={25} color={ICON} />
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.cardActionButton}
+            accessibilityLabel={`More actions for ${item.name}`}
+            onPress={() => openClassMenu(item)}
+          >
+            <Feather name="more-vertical" size={25} color={ICON} />
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -663,7 +700,12 @@ export default function ClassesScreen() {
           style={styles.menuOverlay}
           onPress={() => setMenuClass(null)}
         >
-          <View style={styles.menuCard}>
+          <View
+            style={[
+              styles.menuCard,
+              { left: menuPosition.left, top: menuPosition.top },
+            ]}
+          >
             {menuClass?.is_active ? (
               <TouchableOpacity
                 style={styles.menuItem}
@@ -891,6 +933,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  cardActionButton: {
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   centerState: {
     flex: 1,
     alignItems: "center",
@@ -1090,12 +1138,9 @@ const styles = StyleSheet.create({
   menuOverlay: {
     flex: 1,
     backgroundColor: "rgba(17, 27, 40, 0.08)",
-    justifyContent: "flex-start",
-    alignItems: "flex-end",
-    paddingTop: 145,
-    paddingRight: 16,
   },
   menuCard: {
+    position: "absolute",
     width: 210,
     backgroundColor: WHITE,
     borderRadius: 13,

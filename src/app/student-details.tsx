@@ -485,7 +485,12 @@ export default function StudentDetailsScreen() {
           <ActionRow
             icon="credit-card"
             title="Download ID card"
-            onPress={() => showNotConnected("Download ID card")}
+            onPress={() =>
+              router.push({
+                pathname: "/student-id-card",
+                params: { id: student.id },
+              })
+            }
           />
           <View style={styles.separator} />
           <ActionRow

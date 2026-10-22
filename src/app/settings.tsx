@@ -159,6 +159,10 @@ export default function SettingsScreen() {
         router.push("/batches");
         break;
 
+      case "ID card settings":
+        router.push("/student-id-card-settings");
+        break;
+
       default:
         Alert.alert(
           label,
