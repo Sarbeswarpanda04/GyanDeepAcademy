@@ -42,7 +42,10 @@ export default function StudentsScreen() {
     [status, setStatus] = useState<"active" | "inactive" | "all">("active"),
     [classFilter, setClassFilter] = useState(""),
     [batchFilter, setBatchFilter] = useState(""),
-    [filters, setFilters] = useState(false);
+    [filters, setFilters] = useState(false),
+    [openTopFilter, setOpenTopFilter] = useState<"class" | "batch" | null>(
+      null,
+    );
   const [alert, setAlert] = useState<{
     visible: boolean;
     title: string;
@@ -207,15 +210,84 @@ export default function StudentsScreen() {
           </Pressable>
         </View>
         <View style={st.topFilters}>
-          <View style={st.topChip}>
+          <Pressable
+            style={st.topChip}
+            onPress={() =>
+              setOpenTopFilter((current) =>
+                current === "batch" ? null : "batch",
+              )
+            }
+          >
             <Feather name="map-pin" size={17} color="#C4D4E1" />
-            <Text style={st.topChipText}>All Batches</Text>
-          </View>
-          <View style={st.topChip}>
+            <Text style={st.topChipText} numberOfLines={1}>
+              {batches.find((batch) => batch.id === batchFilter)?.name ??
+                "All Batches"}
+            </Text>
+            <Feather
+              name={openTopFilter === "batch" ? "chevron-up" : "chevron-down"}
+              size={16}
+              color="#C4D4E1"
+            />
+          </Pressable>
+          <Pressable
+            style={st.topChip}
+            onPress={() =>
+              setOpenTopFilter((current) =>
+                current === "class" ? null : "class",
+              )
+            }
+          >
             <Feather name="book-open" size={17} color="#C4D4E1" />
-            <Text style={st.topChipText}>All Classes</Text>
-          </View>
+            <Text style={st.topChipText} numberOfLines={1}>
+              {classes.find((classItem) => classItem.id === classFilter)
+                ?.name ?? "All Classes"}
+            </Text>
+            <Feather
+              name={openTopFilter === "class" ? "chevron-up" : "chevron-down"}
+              size={16}
+              color="#C4D4E1"
+            />
+          </Pressable>
         </View>
+        {openTopFilter && (
+          <View style={st.topFilterMenu}>
+            <ScrollView
+              style={st.topFilterOptions}
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="handled"
+            >
+              {[
+                {
+                  id: "",
+                  name:
+                    openTopFilter === "batch" ? "All Batches" : "All Classes",
+                },
+                ...(openTopFilter === "batch" ? batches : classes),
+              ].map((option) => (
+                <Pressable
+                  key={option.id || "all"}
+                  style={st.topFilterOption}
+                  onPress={() => {
+                    if (openTopFilter === "batch") {
+                      setBatchFilter(option.id);
+                    } else {
+                      setClassFilter(option.id);
+                    }
+                    setOpenTopFilter(null);
+                  }}
+                >
+                  <Text style={st.topFilterOptionText}>{option.name}</Text>
+                  {((openTopFilter === "batch" &&
+                    batchFilter === option.id) ||
+                    (openTopFilter === "class" &&
+                      classFilter === option.id)) && (
+                    <Feather name="check" size={16} color={blue} />
+                  )}
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        )}
       </View>
       <View style={st.body}>
         <View style={st.search}>
@@ -363,17 +435,15 @@ export default function StudentsScreen() {
                     style={st.wa}
                     onPress={() => void contact(s.phone, "wa")}
                   >
-                    <Feather name="message-circle" size={18} color="#167653" />
-                    <Text style={{ color: "#167653", fontWeight: "800" }}>
-                      WhatsApp
-                    </Text>
+                    <Feather name="message-circle" size={18} color="#FFFFFF" />
+                    <Text style={st.actionButtonText}>WhatsApp</Text>
                   </Pressable>
                   <Pressable
                     style={st.call}
                     onPress={() => void contact(s.phone, "tel")}
                   >
-                    <Feather name="phone" size={17} color={navy} />
-                    <Text style={{ color: navy, fontWeight: "800" }}>Call</Text>
+                    <Feather name="phone" size={17} color="#FFFFFF" />
+                    <Text style={st.actionButtonText}>Call</Text>
                   </Pressable>
                 </View>
               </Pressable>
@@ -398,7 +468,7 @@ export default function StudentsScreen() {
 }
 const st = StyleSheet.create({
   screen: { flex: 1, backgroundColor: bg },
-  top: { backgroundColor: navy, padding: 18, paddingBottom: 18 },
+  top: { backgroundColor: navy, paddingTop: 35, padding: 18, paddingBottom: 18 },
   titleRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -424,7 +494,24 @@ const st = StyleSheet.create({
     borderRadius: 14,
     padding: 14,
   },
-  topChipText: { color: "#FFF", fontWeight: "700", fontSize: 13 },
+  topChipText: { flex: 1, color: "#FFF", fontWeight: "700", fontSize: 13 },
+  topFilterMenu: {
+    backgroundColor: "#FFF",
+    borderRadius: 12,
+    marginTop: 8,
+    overflow: "hidden",
+  },
+  topFilterOptions: { maxHeight: 220 },
+  topFilterOption: {
+    minHeight: 44,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#E0E8EF",
+  },
+  topFilterOptionText: { color: navy, fontSize: 14, fontWeight: "600" },
   body: { flex: 1, padding: 16 },
   search: {
     flexDirection: "row",
@@ -475,18 +562,18 @@ const st = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E0E8EF",
     borderRadius: 22,
-    padding: 14,
+    padding: 10,
   },
   studentRow: { flexDirection: "row", alignItems: "flex-start", gap: 11 },
   avatar: {
-    width: 66,
-    height: 66,
+    width: 80,
+    height: 80,
     borderRadius: 18,
     backgroundColor: "#EAF1F7",
   },
   avatarEmpty: {
-    width: 66,
-    height: 66,
+    width: 80,
+    height: 80,
     borderRadius: 18,
     backgroundColor: "#EAF1F7",
     alignItems: "center",
@@ -506,6 +593,7 @@ const st = StyleSheet.create({
   badgeText: { fontSize: 11, fontWeight: "800", color: "#2D65A5" },
   batchText: { fontSize: 11, color: "#7A8FA1", marginTop: 10 },
   actions: { flexDirection: "row", gap: 10, marginTop: 14 },
+  actionButtonText: { color: "#FFFFFF", fontWeight: "800" },
   wa: {
     flex: 1,
     minHeight: 47,
@@ -514,7 +602,7 @@ const st = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
     borderRadius: 14,
-    backgroundColor: "#E7F7EF",
+    backgroundColor: "#02bb52",
     borderWidth: 1,
     borderColor: "#C7EAD8",
   },
@@ -526,7 +614,7 @@ const st = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
     borderRadius: 14,
-    backgroundColor: "#F0F5F9",
+    backgroundColor: "#006eff",
     borderWidth: 1,
     borderColor: "#E2EAF1",
   },

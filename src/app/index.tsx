@@ -1,6 +1,8 @@
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   View,
   Text,
   Pressable,
@@ -10,6 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { supabase } from "../lib/supabase";
 
 const NAVY = "#10264A";
 const GOLD = "#D9AC52";
@@ -44,7 +47,52 @@ const roles = [
 
 export default function Index() {
   const [selectedRole, setSelectedRole] = useState("");
+  const [checkingSession, setCheckingSession] = useState(true);
   const router = useRouter();
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const restoreSession = async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) throw error;
+
+        if (!data.session) {
+          if (!cancelled) setCheckingSession(false);
+          return;
+        }
+
+        const { data: membership, error: membershipError } = await supabase
+          .from("institute_members")
+          .select("id")
+          .eq("user_id", data.session.user.id)
+          .eq("role", "owner")
+          .limit(1)
+          .maybeSingle();
+
+        if (membershipError) throw membershipError;
+        if (cancelled) return;
+
+        router.replace(membership ? "/dashboard" : "/institute-setup");
+      } catch (error: unknown) {
+        if (cancelled) return;
+
+        Alert.alert(
+          "Unable to restore your session",
+          error instanceof Error
+            ? error.message
+            : "Please try signing in again.",
+        );
+        setCheckingSession(false);
+      }
+    };
+
+    void restoreSession();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   function continueSetup() {
     if (!selectedRole) return;
@@ -54,6 +102,18 @@ export default function Index() {
       pathname: "/login",
       params: { role: selectedRole },
     });
+  }
+
+  if (checkingSession) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <StatusBar barStyle="dark-content" backgroundColor={BACKGROUND} />
+        <View style={styles.loading}>
+          <ActivityIndicator size="large" color={NAVY} />
+          <Text style={styles.loadingText}>Restoring your session...</Text>
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -172,6 +232,17 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: BACKGROUND,
+  },
+  loading: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  loadingText: {
+    color: NAVY,
+    fontSize: 14,
+    fontWeight: "600",
   },
   container: {
     flexGrow: 1,

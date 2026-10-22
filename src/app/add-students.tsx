@@ -21,7 +21,12 @@ import { decode } from "base64-arraybuffer";
 import { router, useLocalSearchParams } from "expo-router";
 import { supabase } from "../lib/supabase";
 
-type ClassRow = { id: string; name: string };
+type ClassRow = {
+  id: string;
+  name: string;
+  default_fee_amount: number | null;
+  default_fee_frequency: Frequency;
+};
 type SubjectRow = { id: string; name: string; class_id: string };
 type BatchRow = { id: string; name: string; class_id?: string | null };
 type Frequency =
@@ -123,7 +128,7 @@ export default function AddStudentsScreen() {
   const [address, setAddress] = useState("");
 
   const [frequency, setFrequency] = useState<Frequency>("monthly");
-  const [amount, setAmount] = useState("500");
+  const [amount, setAmount] = useState("");
   const [billingDay, setBillingDay] = useState(5);
   const [hasExistingFee, setHasExistingFee] = useState(false);
   const [originalClassId, setOriginalClassId] = useState("");
@@ -207,7 +212,7 @@ export default function AddStudentsScreen() {
         const [classResult, subjectResult, batchResult] = await Promise.all([
           supabase
             .from("institute_classes")
-            .select("id, name")
+            .select("id, name, default_fee_amount, default_fee_frequency")
             .eq("institute_id", id)
             .eq("is_active", true)
             .order("name"),
@@ -287,7 +292,9 @@ export default function AddStudentsScreen() {
             const { data: existingClass, error: existingClassError } =
               await supabase
                 .from("institute_classes")
-                .select("id,name")
+                .select(
+                  "id,name,default_fee_amount,default_fee_frequency",
+                )
                 .eq("id", existingStudent.class_id)
                 .eq("institute_id", id)
                 .maybeSingle();
@@ -350,7 +357,15 @@ export default function AddStudentsScreen() {
             setBillingDay(studentFee.billing_day ?? 5);
             setHasExistingFee(true);
           } else {
-            setAmount("");
+            const classDefault = loadedClasses.find(
+              (item) => item.id === existingStudent.class_id,
+            );
+            setAmount(
+              classDefault?.default_fee_amount == null
+                ? ""
+                : String(classDefault.default_fee_amount),
+            );
+            setFrequency(classDefault?.default_fee_frequency ?? "monthly");
           }
         }
 
@@ -407,6 +422,13 @@ export default function AddStudentsScreen() {
 
   const chooseClass = (id: string) => {
     setClassId(id);
+    const selectedClass = classes.find((item) => item.id === id);
+    setAmount(
+      selectedClass?.default_fee_amount == null
+        ? ""
+        : String(selectedClass.default_fee_amount),
+    );
+    setFrequency(selectedClass?.default_fee_frequency ?? "monthly");
     setSubjectIds([]);
     setBatchIds([]);
     setPicker(null);

@@ -34,10 +34,27 @@ type ClassItem = {
   id: string;
   institute_id: string;
   name: string;
+  default_fee_amount: number | null;
+  default_fee_frequency: FeeFrequency;
   is_active: boolean;
   created_at: string;
   updated_at?: string;
 };
+
+type FeeFrequency =
+  | "monthly"
+  | "quarterly"
+  | "half_yearly"
+  | "yearly"
+  | "one_time";
+
+const FEE_FREQUENCIES: { label: string; value: FeeFrequency }[] = [
+  { label: "Monthly", value: "monthly" },
+  { label: "Quarterly", value: "quarterly" },
+  { label: "Half-yearly", value: "half_yearly" },
+  { label: "Yearly", value: "yearly" },
+  { label: "One-time", value: "one_time" },
+];
 
 type SheetMode = "create" | "edit" | null;
 type ConfirmAction = "deactivate" | "delete" | null;
@@ -54,6 +71,9 @@ export default function ClassesScreen() {
 
   const [sheetMode, setSheetMode] = useState<SheetMode>(null);
   const [className, setClassName] = useState("");
+  const [defaultFee, setDefaultFee] = useState("");
+  const [defaultFeeFrequency, setDefaultFeeFrequency] =
+    useState<FeeFrequency>("monthly");
   const [editingClass, setEditingClass] = useState<ClassItem | null>(null);
 
   const [menuClass, setMenuClass] = useState<ClassItem | null>(null);
@@ -101,7 +121,9 @@ export default function ClassesScreen() {
 
       const { data, error } = await supabase
         .from("institute_classes")
-        .select("id, institute_id, name, is_active, created_at, updated_at")
+        .select(
+          "id, institute_id, name, default_fee_amount, default_fee_frequency, is_active, created_at, updated_at",
+        )
         .eq("institute_id", membership.institute_id)
         .order("created_at", { ascending: false });
 
@@ -124,12 +146,18 @@ export default function ClassesScreen() {
 
   function openCreateSheet() {
     setClassName("");
+    setDefaultFee("");
+    setDefaultFeeFrequency("monthly");
     setEditingClass(null);
     setSheetMode("create");
   }
 
   function openEditSheet(item: ClassItem) {
     setClassName(item.name);
+    setDefaultFee(
+      item.default_fee_amount == null ? "" : String(item.default_fee_amount),
+    );
+    setDefaultFeeFrequency(item.default_fee_frequency ?? "monthly");
     setEditingClass(item);
     setMenuClass(null);
     setSheetMode("edit");
@@ -140,6 +168,7 @@ export default function ClassesScreen() {
     Keyboard.dismiss();
     setSheetMode(null);
     setClassName("");
+    setDefaultFee("");
     setEditingClass(null);
   }
 
@@ -153,6 +182,16 @@ export default function ClassesScreen() {
 
     if (name.length > 100) {
       Alert.alert("Name too long", "Class names can contain up to 100 characters.");
+      return;
+    }
+
+    const feeText = defaultFee.trim();
+    const feeAmount = feeText ? Number(feeText) : null;
+    if (
+      (sheetMode === "create" && feeAmount === null) ||
+      (feeAmount !== null && (!Number.isFinite(feeAmount) || feeAmount < 0))
+    ) {
+      Alert.alert("Invalid default fee", "Enter a valid non-negative class fee.");
       return;
     }
 
@@ -170,6 +209,8 @@ export default function ClassesScreen() {
           .from("institute_classes")
           .update({
             name,
+            default_fee_amount: feeAmount,
+            default_fee_frequency: defaultFeeFrequency,
             updated_at: new Date().toISOString(),
           })
           .eq("id", editingClass.id)
@@ -188,6 +229,8 @@ export default function ClassesScreen() {
           .insert({
             institute_id: instituteId,
             name,
+            default_fee_amount: feeAmount,
+            default_fee_frequency: defaultFeeFrequency,
           });
 
         if (error) {
@@ -201,6 +244,7 @@ export default function ClassesScreen() {
 
       setSheetMode(null);
       setClassName("");
+      setDefaultFee("");
       setEditingClass(null);
       await loadClasses();
     } catch (error) {
@@ -313,6 +357,15 @@ export default function ClassesScreen() {
             {!item.is_active && (
               <Text style={styles.inactiveLabel}>Inactive</Text>
             )}
+            {item.default_fee_amount != null && (
+              <Text style={styles.classFee}>
+                ₹{Number(item.default_fee_amount).toLocaleString("en-IN")} /{" "}
+                {FEE_FREQUENCIES.find(
+                  (frequency) =>
+                    frequency.value === item.default_fee_frequency,
+                )?.label ?? "Monthly"}
+              </Text>
+            )}
           </View>
         </TouchableOpacity>
 
@@ -344,7 +397,7 @@ export default function ClassesScreen() {
       />
 
       {/* Compact page header */}
-      <View style={[styles.header, { paddingTop: 8 }]}>
+      <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
           accessibilityLabel="Go back"
@@ -523,13 +576,66 @@ export default function ClassesScreen() {
                 accessibilityLabel="Class name"
               />
 
+              <Text style={[styles.inputLabel, styles.feeLabel]}>
+                Default fee{sheetMode === "create" ? " *" : ""}
+              </Text>
+              <TextInput
+                value={defaultFee}
+                onChangeText={(value) =>
+                  setDefaultFee(value.replace(/[^\d.]/g, ""))
+                }
+                placeholder="e.g. 500"
+                placeholderTextColor="#A0A9B5"
+                style={styles.input}
+                keyboardType="decimal-pad"
+                editable={!saving}
+                accessibilityLabel="Default class fee"
+              />
+
+              <Text style={[styles.inputLabel, styles.feeLabel]}>
+                Billing frequency
+              </Text>
+              <View style={styles.feeFrequencyOptions}>
+                {FEE_FREQUENCIES.map((frequency) => (
+                  <TouchableOpacity
+                    key={frequency.value}
+                    style={[
+                      styles.feeFrequencyOption,
+                      defaultFeeFrequency === frequency.value &&
+                        styles.feeFrequencyOptionActive,
+                    ]}
+                    onPress={() =>
+                      setDefaultFeeFrequency(frequency.value)
+                    }
+                    disabled={saving}
+                  >
+                    <Text
+                      style={[
+                        styles.feeFrequencyText,
+                        defaultFeeFrequency === frequency.value &&
+                          styles.feeFrequencyTextActive,
+                      ]}
+                    >
+                      {frequency.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
               <TouchableOpacity
                 style={[
                   styles.submitButton,
-                  (!className.trim() || saving) && styles.submitDisabled,
+                  (!className.trim() ||
+                    (sheetMode === "create" && !defaultFee.trim()) ||
+                    saving) &&
+                    styles.submitDisabled,
                 ]}
                 onPress={() => void saveClass()}
-                disabled={!className.trim() || saving}
+                disabled={
+                  !className.trim() ||
+                  (sheetMode === "create" && !defaultFee.trim()) ||
+                  saving
+                }
                 activeOpacity={0.85}
               >
                 {saving ? (
@@ -700,6 +806,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: WHITE,
     minHeight: 68,
+    paddingTop: 35,
     paddingHorizontal: 16,
     paddingBottom: 10,
     flexDirection: "row",
@@ -766,6 +873,12 @@ const styles = StyleSheet.create({
     color: NAVY,
     fontSize: 17,
     fontWeight: "800",
+  },
+  classFee: {
+    color: GREEN,
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 5,
   },
   inactiveLabel: {
     color: MUTED,
@@ -928,6 +1041,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     color: NAVY,
     fontSize: 16,
+  },
+  feeLabel: {
+    marginTop: 18,
+  },
+  feeFrequencyOptions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  feeFrequencyOption: {
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 18,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+  },
+  feeFrequencyOptionActive: {
+    backgroundColor: NAVY,
+    borderColor: NAVY,
+  },
+  feeFrequencyText: {
+    color: ICON,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  feeFrequencyTextActive: {
+    color: WHITE,
   },
   submitButton: {
     minHeight: 54,

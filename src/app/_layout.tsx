@@ -10,6 +10,7 @@ export default function RootLayout() {
       <Stack.Screen name="dashboard" />
       <Stack.Screen name="students" />
       <Stack.Screen name="add-students" />
+      <Stack.Screen name="student-details-document" />
       <Stack.Screen name="teachers" />
       <Stack.Screen name="attendance" />
       <Stack.Screen name="fees" />

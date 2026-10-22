@@ -2,19 +2,19 @@ import { Feather } from "@expo/vector-icons";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    Linking,
-    Modal,
-    Pressable,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  Image,
+  Linking,
+  Modal,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { supabase } from "../lib/supabase";
+import AppAlert, { type AppAlertType } from "../components/AppAlert";
 
 const navy = "#202F41";
 const bg = "#F1F6FA";
@@ -37,6 +37,8 @@ type FeeDetails = {
   fee_amount: number;
   fee_frequency: string;
 };
+
+type StudentConfirmationAction = "activate" | "inactive" | "delete" | null;
 
 function ActionRow({
   icon,
@@ -66,6 +68,15 @@ export default function StudentDetailsScreen() {
 
   const [menuVisible, setMenuVisible] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [confirmationAction, setConfirmationAction] =
+    useState<StudentConfirmationAction>(null);
+  const [appAlert, setAppAlert] = useState<{
+    title: string;
+    message: string;
+    type: AppAlertType;
+    confirmLabel?: string;
+    onConfirm?: () => void;
+  } | null>(null);
   const [student, setStudent] = useState<StudentDetails | null>(null);
   const [className, setClassName] = useState("Class");
   const [batchNames, setBatchNames] = useState<string[]>([]);
@@ -73,10 +84,23 @@ export default function StudentDetailsScreen() {
   const [fee, setFee] = useState<FeeDetails | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const showAppAlert = useCallback(
+    (
+      title: string,
+      message: string,
+      type: AppAlertType = "info",
+      onConfirm?: () => void,
+      confirmLabel?: string,
+    ) => {
+      setAppAlert({ title, message, type, onConfirm, confirmLabel });
+    },
+    [],
+  );
+
   const loadStudent = useCallback(async () => {
     if (!studentId) {
       setLoading(false);
-      Alert.alert("Student unavailable", "No student ID was provided.");
+      showAppAlert("Student unavailable", "No student ID was provided.", "error");
       return;
     }
 
@@ -148,14 +172,15 @@ export default function StudentDetailsScreen() {
         setPhotoUrl(null);
       }
     } catch (error: any) {
-      Alert.alert(
+      showAppAlert(
         "Unable to load student",
         error?.message ?? "Please try again.",
+        "error",
       );
     } finally {
       setLoading(false);
     }
-  }, [studentId]);
+  }, [showAppAlert, studentId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -165,7 +190,7 @@ export default function StudentDetailsScreen() {
 
   const openContact = async (kind: "tel" | "wa") => {
     if (!student?.phone) {
-      Alert.alert("Phone unavailable", "No phone number is saved.");
+      showAppAlert("Phone unavailable", "No phone number is saved.", "warning");
       return;
     }
 
@@ -176,105 +201,129 @@ export default function StudentDetailsScreen() {
     try {
       await Linking.openURL(url);
     } catch {
-      Alert.alert("Cannot open app", "No compatible app was found.");
+      showAppAlert("Cannot open app", "No compatible app was found.", "error");
     }
   };
 
-  const activateStudent = () => {
-    const currentStudent = student;
-    if (!currentStudent?.id || actionLoading) return;
+  const confirmStudentAction = async () => {
+    if (!student?.id || !confirmationAction || actionLoading) return;
 
-    Alert.alert(
-      "Activate student?",
-      `${currentStudent.full_name} will return to the active roster and can be included in attendance.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Activate student",
-          onPress: async () => {
-            try {
-              setActionLoading(true);
+    const action = confirmationAction;
+    setActionLoading(true);
+    let studentDeleted = false;
 
-              const { data, error } = await supabase
-                .from("institute_students")
-                .update({ status: "active" })
-                .eq("id", currentStudent.id)
-                .eq("institute_id", currentStudent.institute_id)
-                .select("id")
-                .single();
+    try {
+      if (action !== "delete") {
+        const nextStatus = action === "activate" ? "active" : "inactive";
+        const { data, error } = await supabase
+          .from("institute_students")
+          .update({ status: nextStatus })
+          .eq("id", student.id)
+          .eq("institute_id", student.institute_id)
+          .select("id")
+          .single();
 
-              if (error) throw error;
-              if (!data) throw new Error("Student was not activated.");
+        if (error) throw error;
+        if (!data) {
+          throw new Error(
+            action === "activate"
+              ? "Student was not activated."
+              : "Student status was not updated.",
+          );
+        }
 
-              setStudent({ ...currentStudent, status: "active" });
-              setMenuVisible(false);
-              router.replace({
-                pathname: "/student-details",
-                params: { id: currentStudent.id },
-              });
-            } catch (error: any) {
-              Alert.alert(
-                "Activation failed",
-                error?.message ?? "Could not activate this student.",
-              );
-            } finally {
-              setActionLoading(false);
-            }
-          },
-        },
-      ],
-    );
-  };
+        setStudent({ ...student, status: nextStatus });
+        setConfirmationAction(null);
+        showAppAlert(
+          action === "activate" ? "Student activated" : "Student marked inactive",
+          action === "activate"
+            ? "Student is back on the active roster."
+            : "Student will no longer appear in the active roster.",
+          "success",
+        );
+        return;
+      }
 
-  const markStudentInactive = () => {
-    const currentStudent = student;
-    if (!currentStudent?.id || actionLoading) return;
+      const relatedTables = [
+        "institute_student_batches",
+        "institute_student_subjects",
+        "institute_student_fees",
+      ] as const;
 
-    Alert.alert(
-      "Mark student inactive?",
-      `${currentStudent.full_name} will be marked inactive. The student record and fee history will be retained.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Mark inactive",
-          onPress: async () => {
-            try {
-              setActionLoading(true);
+      for (const table of relatedTables) {
+        const { error } = await supabase
+          .from(table)
+          .delete()
+          .eq("student_id", student.id);
 
-              const { data, error } = await supabase
-                .from("institute_students")
-                .update({ status: "inactive" })
-                .eq("id", currentStudent.id)
-                .eq("institute_id", currentStudent.institute_id)
-                .select("id")
-                .single();
+        if (error) throw error;
+      }
 
-              if (error) throw error;
-              if (!data) throw new Error("Student status was not updated.");
+      const { data, error } = await supabase
+        .from("institute_students")
+        .delete()
+        .eq("id", student.id)
+        .eq("institute_id", student.institute_id)
+        .select("id")
+        .single();
 
-              setStudent({ ...currentStudent, status: "inactive" });
-              setMenuVisible(false);
-              Alert.alert("Success", "Student marked inactive.");
-            } catch (error: any) {
-              Alert.alert(
-                "Unable to update student",
-                error?.message ?? "An unexpected error occurred.",
-              );
-            } finally {
-              setActionLoading(false);
-            }
-          },
-        },
-      ],
-    );
+      if (error) throw error;
+      if (!data) {
+        throw new Error("Student was not deleted. Check your permissions.");
+      }
+
+      studentDeleted = true;
+      setConfirmationAction(null);
+    } catch (error: any) {
+      setConfirmationAction(null);
+      showAppAlert(
+        action === "activate"
+          ? "Activation failed"
+          : action === "inactive"
+            ? "Unable to update student"
+            : "Unable to delete student",
+        error?.message ??
+          (action === "delete"
+            ? "Deletion failed. Related records or permissions may need attention."
+            : "Could not update this student's status."),
+        "error",
+      );
+    } finally {
+      setActionLoading(false);
+      if (studentDeleted) {
+        showAppAlert(
+          "Student deleted",
+          "The student has been removed.",
+          "success",
+          () => router.replace("/students"),
+        );
+      }
+    }
   };
 
   const showNotConnected = (feature: string) => {
-    Alert.alert(
+    showAppAlert(
       feature,
       `The ${feature.toLowerCase()} feature needs to be connected to your app's data and screen.`,
+      "info",
     );
   };
+
+  const appAlertModal = (
+    <AppAlert
+      visible={!!appAlert}
+      title={appAlert?.title ?? ""}
+      message={appAlert?.message ?? ""}
+      type={appAlert?.type ?? "info"}
+      confirmLabel={appAlert?.confirmLabel}
+      onConfirm={() => {
+        const onConfirm = appAlert?.onConfirm;
+        setAppAlert(null);
+        onConfirm?.();
+      }}
+      onCancel={() => setAppAlert(null)}
+    />
+  );
 
   if (loading) {
     return (
@@ -282,6 +331,7 @@ export default function StudentDetailsScreen() {
         <StatusBar barStyle="light-content" backgroundColor={navy} />
         <ActivityIndicator size="large" color={blue} />
         <Text style={styles.loadingText}>Loading student profile...</Text>
+        {appAlertModal}
       </View>
     );
   }
@@ -294,6 +344,7 @@ export default function StudentDetailsScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <Text style={styles.backText}>Go back</Text>
         </Pressable>
+        {appAlertModal}
       </View>
     );
   }
@@ -316,6 +367,19 @@ export default function StudentDetailsScreen() {
             </Pressable>
 
             <View style={{ flex: 1 }} />
+
+            <Pressable
+              style={styles.navButton}
+              onPress={() =>
+                router.push({
+                  pathname: "/student-details-document",
+                  params: { id: student.id },
+                })
+              }
+              accessibilityLabel="Download student details document"
+            >
+              <Feather name="download" size={24} color="#FFFFFF" />
+            </Pressable>
 
             <Pressable
               style={styles.navButton}
@@ -373,7 +437,7 @@ export default function StudentDetailsScreen() {
               style={styles.whatsappButton}
               onPress={() => void openContact("wa")}
             >
-              <Feather name="message-circle" size={23} color="#167653" />
+              <Feather name="message-circle" size={23} color="#FFFFFF" />
               <Text style={styles.whatsappText}>WhatsApp</Text>
             </Pressable>
 
@@ -431,12 +495,16 @@ export default function StudentDetailsScreen() {
             onPress={() => {
               const message = `Hello, this is a fee reminder from GyanDeep Academy for ${student.full_name}.`;
               if (!student.phone) {
-                Alert.alert("Phone unavailable", "No phone number is saved.");
+                showAppAlert(
+                  "Phone unavailable",
+                  "No phone number is saved.",
+                  "warning",
+                );
                 return;
               }
               const url = `https://wa.me/${student.phone.replace(/\D/g, "")}?text=${encodeURIComponent(message)}`;
               void Linking.openURL(url).catch(() =>
-                Alert.alert("Cannot open app", "Please try again."),
+                showAppAlert("Cannot open app", "Please try again.", "error"),
               );
             }}
           />
@@ -564,9 +632,10 @@ export default function StudentDetailsScreen() {
               style={styles.menuItem}
               onPress={() => {
                 setMenuVisible(false);
-                Alert.alert(
+                showAppAlert(
                   "Mark absent for dates",
                   "Attendance screen needs to be connected.",
+                  "info",
                 );
               }}
             >
@@ -580,7 +649,7 @@ export default function StudentDetailsScreen() {
                 disabled={actionLoading}
                 onPress={() => {
                   setMenuVisible(false);
-                  activateStudent();
+                  setConfirmationAction("activate");
                 }}
               >
                 <Feather name="check-circle" size={24} color="#4CAF50" />
@@ -592,7 +661,7 @@ export default function StudentDetailsScreen() {
                 disabled={actionLoading}
                 onPress={() => {
                   setMenuVisible(false);
-                  markStudentInactive();
+                  setConfirmationAction("inactive");
                 }}
               >
                 <Feather name="slash" size={24} color="#526A80" />
@@ -602,13 +671,10 @@ export default function StudentDetailsScreen() {
 
             <Pressable
               style={styles.menuItem}
+              disabled={actionLoading}
               onPress={() => {
                 setMenuVisible(false);
-                Alert.alert(
-                  "Delete student",
-                  "Connect this action to your confirmed student deletion flow.",
-                  [{ text: "OK" }],
-                );
+                setConfirmationAction("delete");
               }}
             >
               <Feather name="trash-2" size={24} color="#E53935" />
@@ -619,6 +685,98 @@ export default function StudentDetailsScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={confirmationAction !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          if (!actionLoading) setConfirmationAction(null);
+        }}
+      >
+        <View style={styles.confirmationOverlay}>
+          <Pressable
+            style={styles.confirmationBackdrop}
+            disabled={actionLoading}
+            onPress={() => setConfirmationAction(null)}
+          />
+
+          <View style={styles.confirmationSheet}>
+            <Pressable
+              style={styles.confirmationClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close confirmation"
+              disabled={actionLoading}
+              onPress={() => setConfirmationAction(null)}
+            >
+              <Feather name="x" size={25} color="#FFFFFF" />
+            </Pressable>
+
+            <View style={styles.confirmationIcon}>
+              <Feather
+                name={
+                  confirmationAction === "delete"
+                    ? "trash-2"
+                    : confirmationAction === "activate"
+                      ? "check-circle"
+                      : "slash"
+                }
+                size={38}
+                color={confirmationAction === "activate" ? "#4CAF50" : "#DC3B3B"}
+              />
+            </View>
+
+            <Text style={styles.confirmationTitle}>
+              {confirmationAction === "delete"
+                ? `Delete ${student.full_name}?`
+                : confirmationAction === "activate"
+                  ? `Activate ${student.full_name}?`
+                  : `Mark ${student.full_name} inactive?`}
+            </Text>
+            <Text style={styles.confirmationMessage}>
+              {confirmationAction === "delete"
+                ? "This permanently removes the student and their known batch, subject, and fee configuration records. Other related records may prevent deletion. This can't be undone."
+                : confirmationAction === "activate"
+                  ? "They'll return to the active roster and can be included in attendance."
+                  : "They'll stop appearing in the active roster and won't be marked for attendance. You can reactivate them later."}
+            </Text>
+
+            <View style={styles.confirmationButtons}>
+              <Pressable
+                style={styles.confirmationCancel}
+                disabled={actionLoading}
+                onPress={() => setConfirmationAction(null)}
+              >
+                <Text style={styles.confirmationCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.confirmationSubmit,
+                  confirmationAction === "activate" &&
+                    styles.confirmationActivate,
+                  actionLoading && styles.confirmationDisabled,
+                ]}
+                disabled={actionLoading}
+                onPress={() => void confirmStudentAction()}
+              >
+                {actionLoading ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.confirmationSubmitText}>
+                    {confirmationAction === "delete"
+                      ? "Delete student"
+                      : confirmationAction === "activate"
+                        ? "Activate student"
+                        : "Mark inactive"}
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {appAlertModal}
     </View>
   );
 }
@@ -637,14 +795,14 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: navy,
     paddingHorizontal: 22,
-    paddingTop: 8,
+    paddingTop: 35,
     paddingBottom: 24,
   },
   navRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    marginBottom: 22,
+    marginBottom: 2,
   },
   navButton: {
     width: 42,
@@ -661,8 +819,8 @@ const styles = StyleSheet.create({
     marginBottom: 25,
   },
   avatar: {
-    width: 104,
-    height: 104,
+    width: 120,
+    height: 120,
     borderRadius: 25,
     backgroundColor: "#EAF1F7",
   },
@@ -670,11 +828,11 @@ const styles = StyleSheet.create({
   profileInfo: { flex: 1, gap: 5 },
   studentName: {
     color: "#FFFFFF",
-    fontSize: 29,
+    fontSize: 24,
     fontWeight: "800",
     marginBottom: 2,
   },
-  studentMeta: { color: "#AABCCB", fontSize: 14, fontWeight: "600" },
+  studentMeta: { color: "#cde5f8", fontSize: 14, fontWeight: "600" },
   inactiveBadge: {
     alignSelf: "flex-start",
     backgroundColor: "#FDE8E8",
@@ -686,26 +844,26 @@ const styles = StyleSheet.create({
   contactButtons: { flexDirection: "row", gap: 12 },
   whatsappButton: {
     flex: 1,
-    minHeight: 60,
+    minHeight: 50,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    backgroundColor: "#E9F7EF",
+    backgroundColor: "#02bb52",
     borderRadius: 19,
   },
-  whatsappText: { color: "#167653", fontSize: 18, fontWeight: "800" },
+  whatsappText: { color: "#ffffff", fontSize: 14, fontWeight: "800" },
   callButton: {
     flex: 1,
-    minHeight: 60,
+    minHeight: 50,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    backgroundColor: "#293B52",
+    backgroundColor: "#006eff",
     borderRadius: 19,
   },
-  callText: { color: "#FFFFFF", fontSize: 18, fontWeight: "800" },
+  callText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
   sectionCard: {
     backgroundColor: "#FFFFFF",
     marginTop: 18,
@@ -874,6 +1032,101 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "600",
     color: "#1E293B",
+  },
+  confirmationOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(15,23,42,0.38)",
+  },
+  confirmationBackdrop: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
+  confirmationSheet: {
+    position: "relative",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 24,
+    paddingTop: 66,
+    paddingBottom: 34,
+  },
+  confirmationClose: {
+    position: "absolute",
+    top: -48,
+    alignSelf: "center",
+    width: 48,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 24,
+    backgroundColor: "#64748B",
+  },
+  confirmationIcon: {
+    width: 112,
+    height: 112,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 30,
+    backgroundColor: "#FCE8E8",
+    marginBottom: 28,
+  },
+  confirmationTitle: {
+    color: "#1E293B",
+    fontSize: 27,
+    lineHeight: 34,
+    fontWeight: "800",
+    textAlign: "center",
+    marginBottom: 14,
+  },
+  confirmationMessage: {
+    color: "#334155",
+    fontSize: 18,
+    lineHeight: 27,
+    fontWeight: "500",
+    textAlign: "center",
+    marginBottom: 36,
+  },
+  confirmationButtons: {
+    flexDirection: "row",
+    alignSelf: "stretch",
+    gap: 14,
+  },
+  confirmationCancel: {
+    flex: 1,
+    minHeight: 60,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: "#DDE5EC",
+    backgroundColor: "#FFFFFF",
+  },
+  confirmationCancelText: {
+    color: "#26384A",
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  confirmationSubmit: {
+    flex: 1,
+    minHeight: 60,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 18,
+    backgroundColor: "#E53935",
+    paddingHorizontal: 8,
+  },
+  confirmationActivate: { backgroundColor: "#21864A" },
+  confirmationDisabled: { opacity: 0.7 },
+  confirmationSubmitText: {
+    color: "#FFFFFF",
+    fontSize: 17,
+    fontWeight: "800",
+    textAlign: "center",
   },
   infoLine: {
     flexDirection: "row",
