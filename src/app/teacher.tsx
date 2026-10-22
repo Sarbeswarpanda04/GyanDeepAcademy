@@ -1,4 +1,5 @@
-import React, { useCallback, useState } from "react";
+
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -16,11 +17,13 @@ import { router, useFocusEffect } from "expo-router";
 import { supabase } from "../lib/supabase";
 import AppAlert, { AppAlertType } from "../components/AppAlert";
 
-const NAVY = "#202F42",
-  BG = "#F1F5F8",
-  MUTED = "#78909F",
-  BORDER = "#DDE5EC",
-  WHITE = "#FFFFFF";
+const NAVY = "#202F42";
+const BG = "#F1F5F8";
+const MUTED = "#78909F";
+const BORDER = "#DDE5EC";
+const WHITE = "#FFFFFF";
+const GREEN = "#397D40";
+
 type Staff = {
   id: string;
   full_name: string;
@@ -32,77 +35,134 @@ type Staff = {
   date_of_birth: string | null;
   weekly_holidays: string[] | null;
   status: string;
+  photo_url?: string | null;
 };
-const money = (n: number) => `₹${Number(n || 0).toLocaleString("en-IN")}`;
+
+const money = (n: number) =>
+  `₹${Number(n || 0).toLocaleString("en-IN")}`;
+
 const titleCase = (s: string) =>
   s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
 
 export default function TeacherScreen() {
   const [rows, setRows] = useState<Staff[]>([]);
-  const [iid, setIid] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState("");
-  const [appAlert, setAppAlert] = useState<{visible:boolean; title:string; message:string; type:AppAlertType}>({visible:false,title:"",message:"",type:"info"});
+
+  const [appAlert, setAppAlert] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type: AppAlertType;
+  }>({
+    visible: false,
+    title: "",
+    message: "",
+    type: "info",
+  });
+
   const load = useCallback(async () => {
     try {
       const {
         data: { user },
-        error: ae,
+        error: authError,
       } = await supabase.auth.getUser();
-      if (ae) throw ae;
+
+      if (authError) throw authError;
       if (!user) throw new Error("Please sign in.");
-      const { data: members, error: me } = await supabase
+
+      const { data: members, error: memberError } = await supabase
         .from("institute_members")
-        .select("institute_id,role")
+        .select("institute_id, role")
         .eq("user_id", user.id);
-      if (me) throw me;
-      if (!members?.length)
+
+      if (memberError) throw memberError;
+
+      if (!members?.length) {
         throw new Error("Your account is not linked to an institute.");
-      if (members.length !== 1)
+      }
+
+      if (members.length !== 1) {
         throw new Error("Select one active institute first.");
-      setIid(members[0].institute_id);
-      const { data, error } = await supabase
+      }
+
+      const instituteId = members[0].institute_id;
+
+      const staffResult = await supabase
         .from("institute_staff")
         .select(
-          "id,full_name,phone,photo_path,staff_type,salary_type,salary_amount,date_of_birth,weekly_holidays,status",
+          "id,full_name,phone,photo_path,staff_type,salary_type,salary_amount,date_of_birth,weekly_holidays,status"
         )
-        .eq("institute_id", members[0].institute_id)
+        .eq("institute_id", instituteId)
         .eq("status", "active")
         .order("full_name");
-      if (error) throw error;
-      const staff = (data ?? []) as Staff[];
-      const withPhotos = await Promise.all(
-        staff.map(async (s) => {
-          if (!s.photo_path) return { ...s, photo_url: null as string | null };
-          const { data: p } = await supabase.storage
+
+      if (staffResult.error) throw staffResult.error;
+
+      const staff = (staffResult.data ?? []) as Staff[];
+
+      const staffWithPhotos = await Promise.all(
+        staff.map(async (person) => {
+          if (!person.photo_path) {
+            return { ...person, photo_url: null };
+          }
+
+          const { data, error } = await supabase.storage
             .from("staff-photos")
-            .createSignedUrl(s.photo_path, 3600);
-          return { ...s, photo_url: p?.signedUrl ?? null };
-        }),
+            .createSignedUrl(person.photo_path, 3600);
+
+          if (error) {
+            return { ...person, photo_url: null };
+          }
+
+          return {
+            ...person,
+            photo_url: data?.signedUrl ?? null,
+          };
+        })
       );
-      setRows(withPhotos as any);
-    } catch (e: any) {
-      setAppAlert({visible:true,title:"Unable to load teachers",message:e?.message ?? "Please try again.",type:"error"});
+
+      setRows(staffWithPhotos);
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "Please try again.";
+
+      setAppAlert({
+        visible: true,
+        title: "Unable to load teachers",
+        message,
+        type: "error",
+      });
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
+
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
       void load();
-    }, [load]),
+    }, [load])
   );
-  const filtered = rows.filter(
-    (x) =>
-      x.full_name.toLowerCase().includes(query.toLowerCase()) ||
-      (x.phone ?? "").includes(query),
-  );
+
+  const filtered = useMemo(() => {
+    const search = query.trim().toLowerCase();
+
+    if (!search) return rows;
+
+    return rows.filter(
+      (person) =>
+        person.full_name.toLowerCase().includes(search) ||
+        (person.phone ?? "").toLowerCase().includes(search)
+    );
+  }, [rows, query]);
+
   return (
     <View style={styles.screen}>
       <StatusBar barStyle="light-content" backgroundColor={NAVY} />
+
       <View style={styles.top}>
         <View style={styles.heading}>
           <View>
@@ -111,10 +171,12 @@ export default function TeacherScreen() {
               {rows.length} {rows.length === 1 ? "teacher" : "teachers"}
             </Text>
           </View>
-          <View style={styles.searchIcon}>
+
+          <View style={styles.headerIcon}>
             <Feather name="users" size={23} color={WHITE} />
           </View>
         </View>
+
         <Pressable
           style={styles.attendance}
           onPress={() => router.push("/attendance" as never)}
@@ -122,18 +184,22 @@ export default function TeacherScreen() {
           <View style={styles.calendar}>
             <Feather name="calendar" size={26} color={WHITE} />
           </View>
+
           <View style={{ flex: 1 }}>
             <Text style={styles.attTitle}>Mark Attendance</Text>
             <Text style={styles.attSub}>Today · Teacher attendance</Text>
           </View>
+
           <Feather name="chevron-right" size={24} color="#9DB1BE" />
         </Pressable>
       </View>
+
       <View style={styles.body}>
         <View style={styles.filterRow}>
           <View style={styles.pill}>
             <Text style={styles.pillText}>All {rows.length}</Text>
           </View>
+
           <View style={styles.searchBox}>
             <Feather name="search" size={17} color={MUTED} />
             <TextInput
@@ -145,28 +211,15 @@ export default function TeacherScreen() {
             />
           </View>
         </View>
+
         {loading ? (
           <View style={styles.center}>
             <ActivityIndicator size="large" color={NAVY} />
             <Text style={styles.emptyText}>Loading teachers…</Text>
           </View>
         ) : filtered.length === 0 ? (
-          <View style={styles.empty}>
-            <View style={styles.emptyIcon}>
-              <Feather name="users" size={32} color="#8CA2B1" />
-            </View>
-            <Text style={styles.emptyTitle}>
-              {query ? "No matching teachers" : "No teachers added yet"}
-            </Text>
-            <Text style={styles.emptyText}>
-              {query
-                ? "Try another name or phone number."
-                : "Add your first teacher to manage salary and attendance."}
-            </Text>
-          </View>
-        ) : (
           <ScrollView
-            contentContainerStyle={{ paddingBottom: 100 }}
+            contentContainerStyle={styles.empty}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -177,43 +230,94 @@ export default function TeacherScreen() {
               />
             }
           >
-            {filtered.map((item: any) => (
-              <Pressable
-                key={item.id}
-                style={styles.staffCard}
-                onPress={() => router.push((`/teacher-details/${item.id}`) as never)}
-              >
-                {item.photo_url ? (
-                  <Image
-                    source={{ uri: item.photo_url }}
-                    style={styles.avatar}
-                  />
-                ) : (
-                  <View style={styles.avatarFallback}>
-                    <Feather name="user" size={25} color="#6E8798" />
-                  </View>
-                )}
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.staffName}>{item.full_name}</Text>
-                  <Text style={styles.staffMeta}>
-                    {titleCase(item.staff_type)}
-                    {item.phone ? ` · ${item.phone}` : ""}
-                  </Text>
-                  <Text style={styles.salary}>
-                    {money(item.salary_amount)} /{" "}
-                    {item.salary_type === "monthly"
-                      ? "month"
-                      : item.salary_type === "daily"
-                        ? "day"
-                        : "batch"}
-                  </Text>
+            <View style={styles.emptyIcon}>
+              <Feather name="users" size={32} color="#8CA2B1" />
+            </View>
+
+            <Text style={styles.emptyTitle}>
+              {query ? "No matching teachers" : "No teachers added yet"}
+            </Text>
+
+            <Text style={styles.emptyText}>
+              {query
+                ? "Try another name or phone number."
+                : "Add your first teacher to manage salary and attendance."}
+            </Text>
+          </ScrollView>
+        ) : (
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 110 }}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => {
+                  setRefreshing(true);
+                  void load();
+                }}
+              />
+            }
+          >
+            {filtered.map((item) => {
+              return (
+                <View key={item.id} style={styles.staffCard}>
+                  <Pressable
+                    style={styles.staffHeader}
+                    onPress={() =>
+                      router.push(
+                        (`/teacher-details/${item.id}`) as never
+                      )
+                    }
+                  >
+                    {item.photo_url ? (
+                      <Image
+                        source={{ uri: item.photo_url }}
+                        style={styles.avatar}
+                      />
+                    ) : (
+                      <View style={styles.avatarFallback}>
+                        <Feather
+                          name="user"
+                          size={25}
+                          color="#6E8798"
+                        />
+                      </View>
+                    )}
+
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.staffName}>
+                        {item.full_name}
+                      </Text>
+
+                      <Text style={styles.staffMeta}>
+                        {titleCase(item.staff_type)}
+                        {item.phone ? ` · ${item.phone}` : ""}
+                      </Text>
+
+                      <Text style={styles.salary}>
+                        {money(item.salary_amount)} /{" "}
+                        {item.salary_type === "monthly"
+                          ? "month"
+                          : item.salary_type === "daily"
+                            ? "day"
+                            : "batch"}
+                      </Text>
+                    </View>
+
+                    <Feather
+                      name="chevron-right"
+                      size={20}
+                      color={MUTED}
+                    />
+                  </Pressable>
+
                 </View>
-                <Feather name="chevron-right" size={20} color={MUTED} />
-              </Pressable>
-            ))}
+              );
+            })}
           </ScrollView>
         )}
       </View>
+
       <View style={styles.bottom}>
         <Pressable
           style={styles.addButton}
@@ -223,23 +327,47 @@ export default function TeacherScreen() {
           <Text style={styles.addText}>Add Teacher</Text>
         </Pressable>
       </View>
-      <AppAlert {...appAlert} onCancel={() => setAppAlert(v => ({...v, visible:false}))} />
+
+      <AppAlert
+        {...appAlert}
+        onCancel={() =>
+          setAppAlert((current) => ({
+            ...current,
+            visible: false,
+          }))
+        }
+      />
     </View>
   );
 }
+
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: BG },
-  top: { backgroundColor: NAVY, paddingBottom: 20 },
+  screen: {
+    flex: 1,
+    backgroundColor: BG,
+  },
+  top: {
+    backgroundColor: NAVY,
+    paddingBottom: 20,
+  },
   heading: {
     paddingHorizontal: 20,
-    paddingTop: 18,
+    paddingTop: 35,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  title: { fontSize: 30, fontWeight: "800", color: WHITE },
-  sub: { fontSize: 16, color: "#A7BAC7", marginTop: 4 },
-  searchIcon: {
+  title: {
+    fontSize: 30,
+    fontWeight: "800",
+    color: WHITE,
+  },
+  sub: {
+    fontSize: 16,
+    color: "#A7BAC7",
+    marginTop: 4,
+  },
+  headerIcon: {
     width: 52,
     height: 52,
     borderRadius: 28,
@@ -265,9 +393,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  attTitle: { fontSize: 18, fontWeight: "800", color: WHITE },
-  attSub: { fontSize: 14, color: "#A7BAC7", marginTop: 5 },
-  body: { flex: 1, paddingHorizontal: 18, paddingTop: 18 },
+  attTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: WHITE,
+  },
+  attSub: {
+    fontSize: 14,
+    color: "#A7BAC7",
+    marginTop: 5,
+  },
+  body: {
+    flex: 1,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+  },
   filterRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -280,7 +420,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
   },
-  pillText: { color: WHITE, fontSize: 16, fontWeight: "800" },
+  pillText: {
+    color: WHITE,
+    fontSize: 16,
+    fontWeight: "800",
+  },
   searchBox: {
     flex: 1,
     flexDirection: "row",
@@ -292,19 +436,30 @@ const styles = StyleSheet.create({
     backgroundColor: WHITE,
     paddingHorizontal: 12,
   },
-  searchInput: { flex: 1, height: 44, color: NAVY },
+  searchInput: {
+    flex: 1,
+    height: 44,
+    color: NAVY,
+  },
   staffCard: {
     backgroundColor: WHITE,
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: BORDER,
     padding: 13,
-    marginBottom: 10,
+    marginBottom: 14,
+  },
+  staffHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
   },
-  avatar: { width: 56, height: 56, borderRadius: 18, backgroundColor: BG },
+  avatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: BG,
+  },
   avatarFallback: {
     width: 56,
     height: 56,
@@ -313,16 +468,33 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  staffName: { fontSize: 16, fontWeight: "800", color: NAVY },
-  staffMeta: { fontSize: 12, color: MUTED, marginTop: 4 },
-  salary: { fontSize: 13, fontWeight: "700", color: "#397D40", marginTop: 5 },
+  staffName: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: NAVY,
+  },
+  staffMeta: {
+    fontSize: 12,
+    color: MUTED,
+    marginTop: 4,
+  },
+  salary: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: GREEN,
+    marginTop: 5,
+  },
+  center: {
+    alignItems: "center",
+    paddingTop: 70,
+  },
   empty: {
+    flexGrow: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 24,
-    paddingTop: 70,
+    paddingTop: 50,
   },
-  center: { alignItems: "center", paddingTop: 70 },
   emptyIcon: {
     width: 76,
     height: 76,
@@ -366,5 +538,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 12,
   },
-  addText: { color: WHITE, fontSize: 20, fontWeight: "800" },
+  addText: {
+    color: WHITE,
+    fontSize: 20,
+    fontWeight: "800",
+  },
 });

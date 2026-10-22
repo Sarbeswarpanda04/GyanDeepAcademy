@@ -17,7 +17,7 @@ import {
 import { Feather } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { supabase } from "../lib/supabase";
 import AppAlert, { type AppAlertType } from "../components/AppAlert";
 
@@ -69,6 +69,9 @@ function base64ToBytes(base64: string): Uint8Array {
 }
 
 export default function AddTeacherScreen() {
+  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const teacherId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const isEditing = Boolean(teacherId);
   const [appAlert, setAppAlert] = useState<{
     visible: boolean;
     title: string;
@@ -97,7 +100,7 @@ export default function AddTeacherScreen() {
     const type: AppAlertType =
       /fail|error|unable|invalid|cannot|could not|permission required|not linked|expired/.test(normalizedTitle)
         ? "error"
-        : /success|added/.test(normalizedTitle)
+        : /success|added|updated/.test(normalizedTitle)
           ? "success"
           : /required|holiday|future|warning/.test(normalizedTitle)
             ? "warning"
@@ -122,6 +125,7 @@ export default function AddTeacherScreen() {
   const [saving, setSaving] = useState(false);
 
   const [photo, setPhoto] = useState("");
+  const [photoSelected, setPhotoSelected] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [staffType, setStaffType] = useState("Teacher");
@@ -160,10 +164,42 @@ export default function AddTeacherScreen() {
           throw new Error("Select one active institute first.");
         }
         if (!["owner", "manager"].includes(memberships[0].role)) {
-          throw new Error("Only owners and managers can add teachers.");
+          throw new Error("Only owners and managers can manage teachers.");
         }
 
-        if (mounted) setInstituteId(memberships[0].institute_id);
+        const activeInstituteId = memberships[0].institute_id;
+        if (mounted) setInstituteId(activeInstituteId);
+
+        // In edit mode, load the existing teacher and prefill the same form.
+        if (teacherId) {
+          const { data: person, error: personError } = await supabase
+            .from("institute_staff")
+            .select("id,full_name,phone,photo_path,staff_type,salary_type,salary_amount,date_of_birth,weekly_holidays,status")
+            .eq("id", teacherId)
+            .eq("institute_id", activeInstituteId)
+            .maybeSingle();
+
+          if (personError) throw personError;
+          if (!person) throw new Error("Teacher record was not found.");
+          if (!mounted) return;
+
+          setName(person.full_name ?? "");
+          setPhone(person.phone ?? "");
+          setStaffType((person.staff_type ?? "teacher").toLowerCase().replace(/^\w/, (letter: string) => letter.toUpperCase()));
+          setSalaryType((person.salary_type ?? "monthly") as SalaryType);
+          setAmount(String(person.salary_amount ?? ""));
+          setWeeklyHolidays(Array.isArray(person.weekly_holidays) && person.weekly_holidays.length
+            ? person.weekly_holidays
+            : ["Sun"]);
+          setDob(person.date_of_birth ?? "");
+
+          if (person.photo_path) {
+            const { data: photoData } = await supabase.storage
+              .from("staff-photos")
+              .createSignedUrl(person.photo_path, 3600);
+            if (mounted) setPhoto(photoData?.signedUrl ?? "");
+          }
+        }
       } catch (error: any) {
         showAppAlert(
           "Cannot open form",
@@ -202,6 +238,7 @@ export default function AddTeacherScreen() {
 
       if (!result.canceled && result.assets?.[0]?.uri) {
         setPhoto(result.assets[0].uri);
+        setPhotoSelected(true);
       }
     } catch (error: any) {
       showAppAlert(
@@ -348,50 +385,55 @@ export default function AddTeacherScreen() {
         !membership ||
         !["owner", "manager"].includes(membership.role)
       ) {
-        throw new Error("You do not have permission to add teachers.");
+        throw new Error("You do not have permission to manage teachers.");
       }
 
-      // Insert the teacher first. Do not insert a duplicate if the photo fails.
-      const { data: staff, error: insertError } = await supabase
-        .from("institute_staff")
-        .insert({
-          institute_id: instituteId,
-          full_name: name.trim(),
-          phone: phone.trim() || null,
-          staff_type: staffType.toLowerCase(),
-          salary_type: salaryType,
-          salary_amount: salaryAmount,
-          weekly_holidays: weeklyHolidays,
-          date_of_birth: dob || null,
-          status: "active",
-          created_by: user.id,
-        })
-        .select("id")
-        .single();
+      const teacherValues = {
+        institute_id: instituteId,
+        full_name: name.trim(),
+        phone: phone.trim() || null,
+        staff_type: staffType.toLowerCase(),
+        salary_type: salaryType,
+        salary_amount: salaryAmount,
+        weekly_holidays: weeklyHolidays,
+        date_of_birth: dob || null,
+      };
 
-      if (insertError) throw insertError;
-      if (!staff?.id) {
-        throw new Error("Teacher was created but no ID was returned.");
+      let savedTeacherId = teacherId;
+
+      if (isEditing && teacherId) {
+        const { error: updateError } = await supabase
+          .from("institute_staff")
+          .update(teacherValues)
+          .eq("id", teacherId)
+          .eq("institute_id", instituteId);
+        if (updateError) throw updateError;
+      } else {
+        const { data: staff, error: insertError } = await supabase
+          .from("institute_staff")
+          .insert({
+            ...teacherValues,
+            status: "active",
+            created_by: user.id,
+          })
+          .select("id")
+          .single();
+        if (insertError) throw insertError;
+        if (!staff?.id) throw new Error("Teacher was created but no ID was returned.");
+        savedTeacherId = staff.id;
       }
 
-      // When a photo is selected, upload it and require success.
-      // If it fails, show the real error and preserve the created record.
-      if (photo) {
+      // Only upload when the user selects a new photo; keep the existing photo otherwise.
+      if (photoSelected && photo && savedTeacherId) {
         try {
-          await uploadTeacherPhoto(staff.id);
+          await uploadTeacherPhoto(savedTeacherId);
         } catch (photoError: any) {
           showAppAlert(
-            "Teacher created, photo upload failed",
-            `${photoError?.message ?? "Unknown photo error"}\n\nThe teacher record already exists. Do not submit the form again, or a duplicate may be created.`,
+            isEditing ? "Teacher updated, photo upload failed" : "Teacher created, photo upload failed",
+            `${photoError?.message ?? "Unknown photo error"}\n\nThe teacher details were saved, but the new photo could not be uploaded.`,
             [
-              {
-                text: "Back to Teachers",
-                onPress: () => router.replace("/teacher" as never),
-              },
-              {
-                text: "Stay here",
-                style: "cancel",
-              },
+              { text: "Back to Teachers", onPress: () => router.replace("/teacher" as never) },
+              { text: "Stay here", style: "cancel" },
             ]
           );
           return;
@@ -399,16 +441,9 @@ export default function AddTeacherScreen() {
       }
 
       showAppAlert(
-        "Teacher added",
-        `${name.trim()} has been added successfully${
-          photo ? " with photo" : ""
-        }.`,
-        [
-          {
-            text: "OK",
-            onPress: () => router.replace("/teacher" as never),
-          },
-        ]
+        isEditing ? "Teacher updated" : "Teacher added",
+        `${name.trim()} ${isEditing ? "has been updated" : "has been added"} successfully${photoSelected ? " with photo" : ""}.`,
+        [{ text: "OK", onPress: () => router.replace("/teacher" as never) }]
       );
     } catch (error: any) {
       showAppAlert(
@@ -465,13 +500,13 @@ export default function AddTeacherScreen() {
         >
           <Feather name="arrow-left" size={25} color={WHITE} />
         </Pressable>
-        <Text style={styles.headerTitle}>Add Teacher</Text>
+        <Text style={styles.headerTitle}>{isEditing ? "Edit Teacher" : "Add Teacher"}</Text>
       </View>
 
       {loading ? (
         <View style={styles.loader}>
           <ActivityIndicator size="large" color={NAVY} />
-          <Text style={styles.loadingText}>Preparing form…</Text>
+          <Text style={styles.loadingText}>{isEditing ? "Loading teacher details…" : "Preparing form…"}</Text>
         </View>
       ) : (
         <ScrollView
@@ -662,7 +697,7 @@ export default function AddTeacherScreen() {
           {saving ? (
             <ActivityIndicator color={WHITE} />
           ) : (
-            <Text style={styles.saveText}>Save Teacher</Text>
+            <Text style={styles.saveText}>{isEditing ? "Update Teacher" : "Save Teacher"}</Text>
           )}
         </Pressable>
       </View>
@@ -778,6 +813,7 @@ const styles = StyleSheet.create({
     backgroundColor: NAVY,
     flexDirection: "row",
     alignItems: "center",
+    paddingTop: "35",
     paddingHorizontal: 18,
     gap: 14,
   },

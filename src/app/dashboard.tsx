@@ -1,4 +1,3 @@
-
 import { useCallback } from "react";
 import {
   Alert,
@@ -42,9 +41,7 @@ export default function DashboardScreen() {
   const sectionBorder = 1;
   const tileGap = 8;
   const tileAreaWidth =
-    width -
-    contentPadding * 2 -
-    (sectionPadding + sectionBorder) * 2;
+    width - contentPadding * 2 - (sectionPadding + sectionBorder) * 2;
   const tileWidth = (tileAreaWidth - tileGap * 2) / 3;
   const quickTileWidth = (tileAreaWidth - tileGap * 3) / 4;
 
@@ -89,6 +86,27 @@ export default function DashboardScreen() {
       color: "#EFF2F4",
       iconColor: "#3E627A",
     },
+    {
+      title: "Assign Subject",
+      icon: "user-check",
+      route: "/assign-subject",
+      color: "#EAF4EE",
+      iconColor: "#397D40",
+    },
+    {
+      title: "Timetable Management",
+      icon: "calendar",
+      route: "/timetable-management",
+      color: "#E8F3EE",
+      iconColor: "#20815A",
+    },
+    {
+      title: "View Timetable",
+      icon: "printer",
+      route: "/timetable-view",
+      color: "#FFF4D6",
+      iconColor: "#947300",
+    },
   ];
 
   const instituteActions: {
@@ -120,6 +138,7 @@ export default function DashboardScreen() {
     {
       title: "Team",
       icon: "users",
+      route: "/team",
       color: "#F0F1F9",
       iconColor: "#5D6DC5",
     },
@@ -167,9 +186,7 @@ export default function DashboardScreen() {
               </Text>
             </View>
 
-            <Text style={[styles.summaryAmount, { color: GREEN }]}>
-              ₹0
-            </Text>
+            <Text style={[styles.summaryAmount, { color: GREEN }]}>₹0</Text>
           </View>
 
           <View style={styles.summaryDivider} />
@@ -206,9 +223,7 @@ export default function DashboardScreen() {
                 Pending
               </Text>
             </View>
-            <Text style={[styles.secondaryAmount, { color: GOLD }]}>
-              ₹0
-            </Text>
+            <Text style={[styles.secondaryAmount, { color: GOLD }]}>₹0</Text>
           </TouchableOpacity>
 
           <View style={styles.secondaryDivider} />
@@ -243,9 +258,7 @@ export default function DashboardScreen() {
                 This month
               </Text>
             </View>
-            <Text style={[styles.secondaryAmount, { color: GREEN }]}>
-              ₹0
-            </Text>
+            <Text style={[styles.secondaryAmount, { color: GREEN }]}>₹0</Text>
           </TouchableOpacity>
         </View>
 
@@ -306,10 +319,7 @@ export default function DashboardScreen() {
                 onPress={() => openSection(item.title, item.route)}
               >
                 <View
-                  style={[
-                    styles.tileIcon,
-                    { backgroundColor: item.iconColor },
-                  ]}
+                  style={[styles.tileIcon, { backgroundColor: item.iconColor }]}
                 >
                   <Feather name={item.icon} size={30} color={WHITE} />
                 </View>
@@ -329,7 +339,6 @@ export default function DashboardScreen() {
     </View>
   );
 }
-
 
 const styles = StyleSheet.create({
   screen: {

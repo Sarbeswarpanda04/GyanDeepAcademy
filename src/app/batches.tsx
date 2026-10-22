@@ -2,7 +2,6 @@
 import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -21,8 +20,29 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
 import InstituteHeader from "../components/InstituteHeader";
 import FloatingTabBar from "../components/FloatingTabBar";
+import AppAlert, { type AppAlertType } from "../components/AppAlert";
 
 type BatchType = "morning" | "evening" | "custom";
+
+type WeekDay = "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday" | "Sunday";
+
+const WEEK_DAYS: WeekDay[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const DEFAULT_DAYS: WeekDay[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+
+type AppAlertState = {
+  visible: boolean;
+  title: string;
+  message: string;
+  type: AppAlertType;
+  confirmLabel?: string;
+};
+
+type BatchPeriod = {
+  id?: string;
+  period_number: number;
+  start_time: string;
+  end_time: string;
+};
 
 type Batch = {
   id: string;
@@ -32,6 +52,7 @@ type Batch = {
   start_time: string;
   end_time: string;
   is_active: boolean;
+  days_of_week: WeekDay[];
   created_at: string;
 };
 
@@ -97,6 +118,27 @@ export default function BatchesScreen() {
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  const [appAlert, setAppAlert] = useState<AppAlertState>({
+    visible: false,
+    title: "",
+    message: "",
+    type: "info",
+    confirmLabel: "OK",
+  });
+
+  const showAppAlert = useCallback((
+    title: string,
+    message: string,
+    type: AppAlertType = "info",
+    confirmLabel = "OK"
+  ) => {
+    setAppAlert({ visible: true, title, message, type, confirmLabel });
+  }, []);
+
+  const closeAppAlert = useCallback(() => {
+    setAppAlert((current) => ({ ...current, visible: false }));
+  }, []);
+
   const [formVisible, setFormVisible] = useState(false);
   const [editingBatch, setEditingBatch] = useState<Batch | null>(null);
   const [menuBatch, setMenuBatch] = useState<Batch | null>(null);
@@ -110,6 +152,12 @@ export default function BatchesScreen() {
   const [startTime, setStartTime] = useState("07:00");
   const [endTime, setEndTime] = useState("09:00");
   const [active, setActive] = useState(true);
+  const [selectedDays, setSelectedDays] = useState<WeekDay[]>(DEFAULT_DAYS);
+  const [periods, setPeriods] = useState<BatchPeriod[]>([
+    { period_number: 1, start_time: "07:00", end_time: "07:45" },
+    { period_number: 2, start_time: "07:45", end_time: "08:30" },
+    { period_number: 3, start_time: "08:30", end_time: "09:15" },
+  ]);
 
   const loadBatches = useCallback(async (showLoader = true) => {
     if (showLoader) setLoading(true);
@@ -147,9 +195,10 @@ export default function BatchesScreen() {
       // If the user belongs to multiple institutes, select the correct
       // institute from your institute switcher before loading this page.
       if (memberships.length > 1) {
-        Alert.alert(
+        showAppAlert(
           "Choose an institute",
-          "Your account belongs to multiple institutes. Open your institute selector and choose an institute before managing batches."
+          "Your account belongs to multiple institutes. Open your institute selector and choose an institute before managing batches.",
+          "warning"
         );
         setInstituteId(null);
         setBatches([]);
@@ -166,7 +215,7 @@ export default function BatchesScreen() {
       const { data, error } = await supabase
         .from("institute_batches")
         .select(
-          "id, institute_id, name, batch_type, start_time, end_time, is_active, created_at"
+          "id, institute_id, name, batch_type, start_time, end_time, is_active, days_of_week, created_at"
         )
         .eq("institute_id", membership.institute_id)
         .order("start_time", { ascending: true });
@@ -175,9 +224,10 @@ export default function BatchesScreen() {
 
       setBatches((data ?? []) as Batch[]);
     } catch (error: any) {
-      Alert.alert(
+      showAppAlert(
         "Unable to load batches",
-        error?.message ?? "Please check your connection and try again."
+        error?.message ?? "Please check your connection and try again.",
+        "error"
       );
     } finally {
       setLoading(false);
@@ -197,6 +247,12 @@ export default function BatchesScreen() {
     setStartTime("07:00");
     setEndTime("09:00");
     setActive(true);
+    setSelectedDays(DEFAULT_DAYS);
+    setPeriods([
+      { period_number: 1, start_time: "07:00", end_time: "07:45" },
+      { period_number: 2, start_time: "07:45", end_time: "08:30" },
+      { period_number: 3, start_time: "08:30", end_time: "09:15" },
+    ]);
     setEditingBatch(null);
   };
 
@@ -205,15 +261,92 @@ export default function BatchesScreen() {
     setFormVisible(true);
   };
 
-  const openEditForm = (batch: Batch) => {
+  const openEditForm = async (batch: Batch) => {
     setEditingBatch(batch);
     setName(batch.name);
     setBatchType(batch.batch_type);
     setStartTime(batch.start_time.slice(0, 5));
     setEndTime(batch.end_time.slice(0, 5));
     setActive(batch.is_active);
+    setSelectedDays((batch.days_of_week ?? DEFAULT_DAYS) as WeekDay[]);
     setMenuBatch(null);
     setFormVisible(true);
+    try {
+      const { data, error } = await supabase
+        .from("institute_batch_periods")
+        .select("id, period_number, start_time, end_time")
+        .eq("batch_id", batch.id)
+        .eq("institute_id", batch.institute_id)
+        .order("period_number", { ascending: true });
+
+      if (error) throw error;
+      setPeriods(
+        (data ?? []).map((period: any) => ({
+          id: period.id,
+          period_number: period.period_number,
+          start_time: String(period.start_time).slice(0, 5),
+          end_time: String(period.end_time).slice(0, 5),
+        }))
+      );
+    } catch (error: any) {
+      showAppAlert(
+        "Unable to load periods",
+        error?.message ?? "Please check the batch-period table in Supabase.",
+        "error"
+      );
+      setPeriods([]);
+    }
+  };
+
+  const toggleDay = (day: WeekDay) => {
+    setSelectedDays((current) =>
+      current.includes(day)
+        ? current.filter((item) => item !== day)
+        : WEEK_DAYS.filter((item) => [...current, day].includes(item))
+    );
+  };
+
+  const setPeriodCount = (value: string) => {
+    const parsed = Number.parseInt(value, 10);
+    if (!value.trim()) {
+      setPeriods([]);
+      return;
+    }
+    if (!Number.isInteger(parsed) || parsed < 0 || parsed > 20) return;
+
+    setPeriods((current) => {
+      if (parsed <= current.length) {
+        return current.slice(0, parsed).map((period, index) => ({
+          ...period,
+          period_number: index + 1,
+        }));
+      }
+      const next = [...current];
+      for (let index = current.length; index < parsed; index += 1) {
+        const startMinutes = 7 * 60 + index * 45;
+        const endMinutes = startMinutes + 45;
+        const format = (minutes: number) =>
+          `${String(Math.floor((minutes % 1440) / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+        next.push({
+          period_number: index + 1,
+          start_time: format(startMinutes),
+          end_time: format(endMinutes),
+        });
+      }
+      return next.map((period, index) => ({ ...period, period_number: index + 1 }));
+    });
+  };
+
+  const updatePeriod = (
+    index: number,
+    field: "start_time" | "end_time",
+    value: string
+  ) => {
+    setPeriods((current) =>
+      current.map((period, periodIndex) =>
+        periodIndex === index ? { ...period, [field]: value } : period
+      )
+    );
   };
 
   const closeForm = () => {
@@ -224,9 +357,10 @@ export default function BatchesScreen() {
 
   const saveBatch = async () => {
     if (!canManage || !instituteId) {
-      Alert.alert(
+      showAppAlert(
         "Permission required",
-        "Only institute owners and managers can create or edit batches."
+        "Only institute owners and managers can create or edit batches.",
+        "warning"
       );
       return;
     }
@@ -235,29 +369,57 @@ export default function BatchesScreen() {
     const normalizedStart = normalizeTime(startTime);
     const normalizedEnd = normalizeTime(endTime);
 
+    if (selectedDays.length === 0) {
+      showAppAlert("Choose class days", "Select at least one day of the week for this batch.", "warning");
+      return;
+    }
     if (!cleanName) {
-      Alert.alert("Batch name required", "Enter a name for this batch.");
+      showAppAlert("Batch name required", "Enter a name for this batch.", "warning");
       return;
     }
-
     if (!normalizedStart || !normalizedEnd) {
-      Alert.alert(
-        "Invalid time",
-        "Enter valid 24-hour times, for example 07:00 and 09:30."
-      );
+      showAppAlert("Invalid time", "Enter valid 24-hour times, for example 07:00 and 09:30.", "warning");
+      return;
+    }
+    if (normalizedStart === normalizedEnd) {
+      showAppAlert("Invalid duration", "The batch start time and end time cannot be the same.", "warning");
+      return;
+    }
+    if (periods.length > 20) {
+      showAppAlert("Too many periods", "A batch can have up to 20 periods.", "warning");
       return;
     }
 
-    if (normalizedStart === normalizedEnd) {
-      Alert.alert(
-        "Invalid duration",
-        "The batch start time and end time cannot be the same."
-      );
-      return;
+    const normalizedPeriods: Array<{
+      institute_id: string;
+      batch_id: string;
+      period_number: number;
+      start_time: string;
+      end_time: string;
+    }> = [];
+
+    for (let index = 0; index < periods.length; index += 1) {
+      const period = periods[index];
+      const periodStart = normalizeTime(period.start_time);
+      const periodEnd = normalizeTime(period.end_time);
+      if (!periodStart || !periodEnd || periodStart === periodEnd) {
+        showAppAlert(
+          "Invalid period time",
+          `Enter valid start and end times for Period ${index + 1}.`,
+          "warning"
+        );
+        return;
+      }
+      normalizedPeriods.push({
+        institute_id: instituteId,
+        batch_id: editingBatch?.id ?? "",
+        period_number: index + 1,
+        start_time: periodStart,
+        end_time: periodEnd,
+      });
     }
 
     setSaving(true);
-
     try {
       const payload = {
         institute_id: instituteId,
@@ -266,50 +428,59 @@ export default function BatchesScreen() {
         start_time: normalizedStart,
         end_time: normalizedEnd,
         is_active: active,
+        days_of_week: WEEK_DAYS.filter((day) => selectedDays.includes(day)),
       };
 
-      let error;
-
+      let batchId = editingBatch?.id;
       if (editingBatch) {
-        const result = await supabase
+        const { error } = await supabase
           .from("institute_batches")
           .update(payload)
           .eq("id", editingBatch.id)
           .eq("institute_id", instituteId);
-
-        error = result.error;
+        if (error) throw error;
       } else {
-        const result = await supabase
+        const { data, error } = await supabase
           .from("institute_batches")
-          .insert(payload);
-
-        error = result.error;
+          .insert(payload)
+          .select("id")
+          .single();
+        if (error) {
+          if (error.code === "23505") {
+            throw new Error("A batch with this name already exists in your institute.");
+          }
+          throw error;
+        }
+        batchId = data.id;
       }
 
-      if (error) {
-        if (error.code === "23505") {
-          throw new Error(
-            "A batch with this name already exists in your institute."
-          );
-        }
-        throw error;
+      if (!batchId) throw new Error("Batch saved, but its ID could not be determined.");
+
+      // Replace the batch's period schedule so edits and deletions stay in sync.
+      const { error: deletePeriodsError } = await supabase
+        .from("institute_batch_periods")
+        .delete()
+        .eq("batch_id", batchId)
+        .eq("institute_id", instituteId);
+      if (deletePeriodsError) throw deletePeriodsError;
+
+      if (normalizedPeriods.length) {
+        const rowsToInsert = normalizedPeriods.map((period) => ({
+          ...period,
+          batch_id: batchId,
+        }));
+        const { error: insertPeriodsError } = await supabase
+          .from("institute_batch_periods")
+          .insert(rowsToInsert);
+        if (insertPeriodsError) throw insertPeriodsError;
       }
 
       setFormVisible(false);
       resetForm();
       await loadBatches(false);
-
-      Alert.alert(
-        "Success",
-        editingBatch
-          ? "Batch updated successfully."
-          : "Batch created successfully."
-      );
+      showAppAlert("Success", editingBatch ? "Batch updated successfully." : "Batch created successfully.", "success");
     } catch (error: any) {
-      Alert.alert(
-        "Could not save batch",
-        error?.message ?? "Please try again."
-      );
+      showAppAlert("Could not save batch", error?.message ?? "Please try again.", "error");
     } finally {
       setSaving(false);
     }
@@ -346,18 +517,20 @@ export default function BatchesScreen() {
 
       await loadBatches(false);
 
-      Alert.alert(
+      showAppAlert(
         "Success",
         action === "delete"
           ? "Batch deleted successfully."
           : target.is_active
             ? "Batch deactivated."
-            : "Batch activated."
+            : "Batch activated.",
+        "success"
       );
     } catch (error: any) {
-      Alert.alert(
+      showAppAlert(
         "Action failed",
-        error?.message ?? "Please try again."
+        error?.message ?? "Please try again.",
+        "error"
       );
     } finally {
       setSaving(false);
@@ -640,6 +813,28 @@ export default function BatchesScreen() {
                 returnKeyType="next"
               />
 
+              <Text style={styles.fieldLabel}>CLASS DAYS</Text>
+              <Text style={styles.daysHint}>Select every day this batch will run.</Text>
+              <View style={styles.daysGrid}>
+                {WEEK_DAYS.map((day) => {
+                  const selected = selectedDays.includes(day);
+                  return (
+                    <Pressable
+                      key={day}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: selected }}
+                      onPress={() => toggleDay(day)}
+                      style={[styles.dayChip, selected && styles.dayChipSelected]}
+                    >
+                      {selected ? <Feather name="check" size={14} color="#FFFFFF" /> : null}
+                      <Text style={[styles.dayChipText, selected && styles.dayChipTextSelected]}>
+                        {day.slice(0, 3)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
               <Text style={styles.fieldLabel}>BATCH TIMING</Text>
               <View style={styles.timeInputRow}>
                 <View style={styles.timeInputColumn}>
@@ -678,6 +873,63 @@ export default function BatchesScreen() {
               <Text style={styles.timeExample}>
                 Example: 07:00 = 7:00 AM · 18:30 = 6:30 PM
               </Text>
+
+              <Text style={styles.fieldLabel}>NUMBER OF PERIODS</Text>
+              <TextInput
+                style={styles.input}
+                value={String(periods.length)}
+                onChangeText={setPeriodCount}
+                placeholder="e.g. 6"
+                placeholderTextColor="#A0A8B5"
+                keyboardType="number-pad"
+                maxLength={2}
+              />
+              <Text style={styles.periodHint}>
+                Set the count, then enter the start and end time for each period.
+              </Text>
+
+              {periods.map((period, index) => (
+                <View key={period.id ?? period.period_number} style={styles.periodCard}>
+                  <View style={styles.periodHeader}>
+                    <View style={styles.periodNumber}>
+                      <Text style={styles.periodNumberText}>{index + 1}</Text>
+                    </View>
+                    <Text style={styles.periodTitle}>Period {index + 1}</Text>
+                  </View>
+                  <View style={styles.timeInputRow}>
+                    <View style={styles.timeInputColumn}>
+                      <Text style={styles.inputHint}>Start time (24-hour)</Text>
+                      <View style={styles.timeInputWrap}>
+                        <Feather name="clock" size={16} color={GOLD} />
+                        <TextInput
+                          style={styles.timeInput}
+                          value={period.start_time}
+                          onChangeText={(value) => updatePeriod(index, "start_time", value)}
+                          placeholder="07:00"
+                          placeholderTextColor="#A0A8B5"
+                          keyboardType="numbers-and-punctuation"
+                          maxLength={5}
+                        />
+                      </View>
+                    </View>
+                    <View style={styles.timeInputColumn}>
+                      <Text style={styles.inputHint}>End time (24-hour)</Text>
+                      <View style={styles.timeInputWrap}>
+                        <Feather name="clock" size={16} color={GOLD} />
+                        <TextInput
+                          style={styles.timeInput}
+                          value={period.end_time}
+                          onChangeText={(value) => updatePeriod(index, "end_time", value)}
+                          placeholder="07:45"
+                          placeholderTextColor="#A0A8B5"
+                          keyboardType="numbers-and-punctuation"
+                          maxLength={5}
+                        />
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              ))}
 
               <Pressable
                 style={styles.activeToggleRow}
@@ -879,6 +1131,16 @@ export default function BatchesScreen() {
           </View>
         </View>
       </Modal>
+
+      <AppAlert
+        visible={appAlert.visible}
+        title={appAlert.title}
+        message={appAlert.message}
+        type={appAlert.type}
+        confirmLabel={appAlert.confirmLabel ?? "OK"}
+        onCancel={closeAppAlert}
+        onConfirm={closeAppAlert}
+      />
     </View>
   );
 }
@@ -981,6 +1243,12 @@ const styles = StyleSheet.create({
   },
   batchInfo: {
     flex: 1,
+  },
+  batchDays: {
+    color: "#53657D",
+    fontSize: 10,
+    fontWeight: "700",
+    marginTop: 5,
   },
   batchName: {
     fontSize: 15,
@@ -1204,6 +1472,43 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     marginBottom: 21,
   },
+  daysHint: {
+    color: MUTED,
+    fontSize: 11,
+    marginTop: -3,
+    marginBottom: 11,
+  },
+  daysGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 21,
+  },
+  dayChip: {
+    minWidth: 69,
+    minHeight: 40,
+    paddingHorizontal: 11,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: "#FFFFFF",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+  },
+  dayChipSelected: {
+    backgroundColor: NAVY,
+    borderColor: NAVY,
+  },
+  dayChipText: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  dayChipTextSelected: {
+    color: "#FFFFFF",
+  },
   timeInputRow: {
     flexDirection: "row",
     gap: 12,
@@ -1238,6 +1543,45 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 9,
     marginBottom: 17,
+  },
+  periodHint: {
+    color: MUTED,
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: -13,
+    marginBottom: 14,
+  },
+  periodCard: {
+    backgroundColor: "#F8F9FC",
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 13,
+    padding: 12,
+    marginBottom: 10,
+  },
+  periodHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    marginBottom: 12,
+  },
+  periodNumber: {
+    width: 27,
+    height: 27,
+    borderRadius: 9,
+    backgroundColor: NAVY,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  periodNumberText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  periodTitle: {
+    color: NAVY,
+    fontSize: 13,
+    fontWeight: "800",
   },
   activeToggleRow: {
     flexDirection: "row",

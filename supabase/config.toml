@@ -1,0 +1,33 @@
+
+[functions.add-team-member]
+enabled = true
+verify_jwt = false
+import_map = "./functions/add-team-member/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/add-team-member/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/add-team-member/*.html" ]
+
+[functions.teacher-pin-login]
+enabled = true
+verify_jwt = false
+import_map = "./functions/teacher-pin-login/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/teacher-pin-login/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/teacher-pin-login/*.html" ]
+
+[functions.update-team-member]
+enabled = true
+verify_jwt = false
+import_map = "./functions/update-team-member/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/update-team-member/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/update-team-member/*.html" ]

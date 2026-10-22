@@ -1,9 +1,9 @@
 import { Feather } from "@expo/vector-icons";
-import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { decode, encode } from "base64-arraybuffer";
 import * as FileSystem from "expo-file-system/legacy";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import * as Sharing from "expo-sharing";
-import React, { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -17,15 +17,15 @@ import {
   Text,
   View,
 } from "react-native";
+import QRCode from "react-native-qrcode-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ViewShot, { captureRef, type ViewShotRef } from "react-native-view-shot";
-import QRCode from "react-native-qrcode-svg";
-import { supabase } from "../lib/supabase";
 import {
   DEFAULT_STUDENT_ID_CARD_SETTINGS,
   loadStudentIdCardSettings,
   type StudentIdCardSettings,
 } from "../lib/student-id-card-settings";
+import { supabase } from "../lib/supabase";
 
 type Student = {
   id: string;
@@ -48,10 +48,10 @@ type Institute = {
   name: string | null;
   slogan: string | null;
   address: string | null;
-  contact_email: string | null;
   contact_phone: string | null;
   logo_url: string | null;
   signature_url: string | null;
+  email: string | null;
 };
 
 const navy = "#1E293B";
@@ -159,10 +159,7 @@ const formatDate = (value: string | null | undefined) => {
       });
 };
 
-async function resolveStorageImage(
-  storedValue: string | null,
-  bucket: string,
-) {
+async function resolveStorageImage(storedValue: string | null, bucket: string) {
   if (!storedValue) return null;
   if (storedValue.startsWith("data:image/")) return storedValue;
 
@@ -255,10 +252,7 @@ function CardField({
   return (
     <View style={[styles.cardField, inline && styles.cardFieldInline]}>
       <Text
-        style={[
-          styles.cardFieldLabel,
-          inline && styles.cardFieldLabelInline,
-        ]}
+        style={[styles.cardFieldLabel, inline && styles.cardFieldLabelInline]}
       >
         {label}
       </Text>
@@ -315,32 +309,28 @@ export default function StudentIdCardScreen() {
 
           const studentRecord = record as Student;
 
-          const [
-            classResult,
-            batchLinks,
-            instituteResult,
-            savedSettings,
-          ] = await Promise.all([
-            studentRecord.class_id
-              ? supabase
-                  .from("institute_classes")
-                  .select("name")
-                  .eq("id", studentRecord.class_id)
-                  .maybeSingle()
-              : Promise.resolve({ data: null, error: null }),
-            supabase
-              .from("institute_student_batches")
-              .select("batch_id")
-              .eq("student_id", studentRecord.id),
-            supabase
-              .from("institutes")
-              .select(
-                "name,slogan,address,contact_email,contact_phone,logo_url,signature_url",
-              )
-              .eq("id", studentRecord.institute_id)
-              .maybeSingle(),
-            loadStudentIdCardSettings(studentRecord.institute_id),
-          ]);
+          const [classResult, batchLinks, instituteResult, savedSettings] =
+            await Promise.all([
+              studentRecord.class_id
+                ? supabase
+                    .from("institute_classes")
+                    .select("name")
+                    .eq("id", studentRecord.class_id)
+                    .maybeSingle()
+                : Promise.resolve({ data: null, error: null }),
+              supabase
+                .from("institute_student_batches")
+                .select("batch_id")
+                .eq("student_id", studentRecord.id),
+              supabase
+                .from("institutes")
+                .select(
+                  "name,slogan,address,contact_phone,logo_url,signature_url",
+                )
+                .eq("id", studentRecord.institute_id)
+                .maybeSingle(),
+              loadStudentIdCardSettings(studentRecord.institute_id),
+            ]);
 
           if (classResult.error) throw classResult.error;
           if (batchLinks.error) throw batchLinks.error;
@@ -520,8 +510,10 @@ export default function StudentIdCardScreen() {
 
   const width = Math.min(Dimensions.get("window").width - 32, 400);
   const previewHeight = isHorizontal
-    ? width * (CARD_PRINT_SIZE.landscape.height / CARD_PRINT_SIZE.landscape.width)
-    : width * (CARD_PRINT_SIZE.portrait.height / CARD_PRINT_SIZE.portrait.width);
+    ? width *
+      (CARD_PRINT_SIZE.landscape.height / CARD_PRINT_SIZE.landscape.width)
+    : width *
+      (CARD_PRINT_SIZE.portrait.height / CARD_PRINT_SIZE.portrait.width);
 
   if (loading) {
     return (
@@ -652,7 +644,12 @@ export default function StudentIdCardScreen() {
           ]}
         >
           {/* Card Top Header */}
-          <View style={[styles.cardHeader, isHorizontal && styles.cardHeaderHorizontal]}>
+          <View
+            style={[
+              styles.cardHeader,
+              isHorizontal && styles.cardHeaderHorizontal,
+            ]}
+          >
             {logoUrl ? (
               <Image
                 source={{ uri: logoUrl }}
@@ -708,7 +705,11 @@ export default function StudentIdCardScreen() {
                 </Text>
                 <View style={styles.mandatoryFields}>
                   <CardField label="Roll No." value={student.roll_number} />
-                  <CardField label="Phone" value={student.phone ?? "—"} inline />
+                  <CardField
+                    label="Phone"
+                    value={student.phone ?? "—"}
+                    inline
+                  />
                   <CardField label="Class" value={className || "—"} />
                   <CardField label="Batch" value={batches.join(", ") || "—"} />
                 </View>
@@ -767,7 +768,12 @@ export default function StudentIdCardScreen() {
           )}
 
           {/* Verification QR and Signature Section */}
-          <View style={[styles.cardVerificationRow, isHorizontal && styles.cardVerificationRowHorizontal]}>
+          <View
+            style={[
+              styles.cardVerificationRow,
+              isHorizontal && styles.cardVerificationRowHorizontal,
+            ]}
+          >
             <View style={styles.qrBlock}>
               <QRCode
                 value={JSON.stringify({
@@ -805,21 +811,37 @@ export default function StudentIdCardScreen() {
               <View style={styles.signatureLine} />
               <Text style={styles.signatureTitle}>Authorized Signature</Text>
               {!isHorizontal && (
-                <Text style={styles.signatureAuthority}>INSTITUTE AUTHORITY</Text>
+                <Text style={styles.signatureAuthority}>
+                  INSTITUTE AUTHORITY
+                </Text>
               )}
             </View>
           </View>
 
           {/* Card Footer */}
-          <View style={[styles.cardFooter, isHorizontal && styles.cardFooterHorizontal]}>
-            {!!institute?.contact_email && (
-              <Text style={styles.footerText} numberOfLines={1}>
-                {institute.contact_email}
+          <View
+            style={[
+              styles.cardFooter,
+              isHorizontal && styles.cardFooterHorizontal,
+            ]}
+          >
+            <View style={styles.footerMain}>
+              <Text style={styles.footerContact} numberOfLines={1}>
+                INSTITUTE EMAIL: {institute.email}
               </Text>
-            )}
-            {!!institute?.contact_phone && (
-              <Text style={styles.footerText} numberOfLines={1}>
-                {institute.contact_phone}
+
+              <Text
+                style={[
+                  styles.footerText,
+                  student.status === "inactive" && styles.inactiveText,
+                ]}
+              >
+                {student.status === "inactive" ? "INACTIVE" : "VALID STUDENT"}
+              </Text>
+            </View>
+            {!isHorizontal && !!institute?.contact_phone && (
+              <Text style={styles.footerContact} numberOfLines={1}>
+                INSTITUTE CONTACT: {institute.contact_phone}
               </Text>
             )}
           </View>
@@ -842,13 +864,17 @@ export default function StudentIdCardScreen() {
           <View style={styles.settingsIconCircle}>
             <Feather name="sliders" size={16} color={primaryBlue} />
           </View>
-          <Text style={styles.settingsLinkText}>Customize ID Card Template</Text>
+          <Text style={styles.settingsLinkText}>
+            Customize ID Card Template
+          </Text>
           <Feather name="chevron-right" size={18} color={accentSlate} />
         </Pressable>
       </ScrollView>
 
       {/* Action Footer */}
-      <View style={[styles.actions, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+      <View
+        style={[styles.actions, { paddingBottom: Math.max(insets.bottom, 12) }]}
+      >
         <Pressable
           style={[styles.actionButton, styles.shareButton]}
           onPress={() => void shareCard()}
@@ -968,8 +994,18 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     textTransform: "uppercase",
   },
-  instituteSlogan: { color: "#ffbb00", fontSize: 12, marginTop: 2, textAlign: "center" },
-  instituteContact: { color: "#CBD5E1", fontSize: 12, marginTop: 1, textAlign: "center" },
+  instituteSlogan: {
+    color: "#ffbb00",
+    fontSize: 12,
+    marginTop: 2,
+    textAlign: "center",
+  },
+  instituteContact: {
+    color: "#CBD5E1",
+    fontSize: 12,
+    marginTop: 1,
+    textAlign: "center",
+  },
   verticalIdentity: {
     alignItems: "center",
     paddingHorizontal: 18,
@@ -1023,6 +1059,12 @@ const styles = StyleSheet.create({
     marginBottom: 1,
     letterSpacing: 0.35,
     textTransform: "uppercase",
+  },
+  studentClass: {
+    color: primaryBlue,
+    fontSize: 15,
+    fontWeight: "800",
+    letterSpacing: 1.1,
   },
   studentRoll: {
     color: primaryBlue,
@@ -1125,23 +1167,35 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: 48,
-    gap: 2,
+    height: 44,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: navy,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     borderTopWidth: 2,
     borderTopColor: "#D5AD5B",
   },
-  cardFooterHorizontal: { height: 48 },
+  cardFooterHorizontal: { height: 24 },
+  footerMain: {
+    width: "100%",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
   footerText: {
     color: "#FFFFFF",
-    fontSize: 12,
+    fontSize: 7,
+    letterSpacing: 0.55,
     fontWeight: "700",
-    textAlign: "center",
-    maxWidth: "100%",
   },
+  footerContact: {
+    color: "#D5AD5B",
+    fontSize: 6,
+    fontWeight: "700",
+    marginTop: 2,
+    letterSpacing: 0.4,
+  },
+  inactiveText: { color: "#F87171" },
   imageHint: { color: accentSlate, fontSize: 12, marginTop: 12 },
   settingsLink: {
     width: "100%",

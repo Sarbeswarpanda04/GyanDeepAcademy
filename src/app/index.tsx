@@ -94,15 +94,22 @@ export default function Index() {
     };
   }, [router]);
 
-  function continueSetup() {
-    if (!selectedRole) return;
 
-    // Authentication screen will be implemented next.
-    router.push({
-      pathname: "/login",
-      params: { role: selectedRole },
-    });
+function continueSetup() {
+  if (!selectedRole) return;
+
+  if (selectedRole === "teacher") {
+    router.push("/teacher/teacher-login");
+    return;
   }
+
+  // Keep the existing flow for other roles.
+  router.push({
+    pathname: "/login",
+    params: { role: selectedRole },
+  });
+}
+
 
   if (checkingSession) {
     return (

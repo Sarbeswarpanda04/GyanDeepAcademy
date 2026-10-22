@@ -34,6 +34,10 @@ type SalaryType = "monthly" | "daily" | "batch";
 type AttendanceStatus = "absent" | "holiday" | "present";
 type Session = "morning" | "evening" | "batch";
 
+type AssignedClass = { id: string; name: string };
+type AssignedSubject = { id: string; name: string; class_id: string };
+type SubjectAssignment = { id: string; class_id: string; subject_id: string; teacher_id: string };
+
 type Staff = {
   id: string;
   institute_id: string;
@@ -148,6 +152,9 @@ export default function TeacherDetailsScreen() {
     Record<string, AttendanceRow>
   >({});
   const [payouts, setPayouts] = useState<Payout[]>([]);
+  const [assignedClasses, setAssignedClasses] = useState<AssignedClass[]>([]);
+  const [assignedSubjects, setAssignedSubjects] = useState<AssignedSubject[]>([]);
+  const [subjectAssignments, setSubjectAssignments] = useState<SubjectAssignment[]>([]);
   const [month, setMonth] = useState(
     () => new Date(new Date().getFullYear(), new Date().getMonth(), 1)
   );
@@ -242,6 +249,33 @@ export default function TeacherDetailsScreen() {
       if (staffError) throw staffError;
 
       setStaff(person as Staff);
+
+      // Load this teacher's assigned subjects, grouped by class.
+      const [classesResult, subjectsResult, assignmentsResult] = await Promise.all([
+        supabase
+          .from("institute_classes")
+          .select("id,name")
+          .eq("institute_id", membership.institute_id)
+          .order("name"),
+        supabase
+          .from("institute_subjects")
+          .select("id,name,class_id")
+          .eq("institute_id", membership.institute_id)
+          .order("name"),
+        supabase
+          .from("institute_subject_teachers")
+          .select("id,class_id,subject_id,teacher_id")
+          .eq("institute_id", membership.institute_id)
+          .eq("teacher_id", staffId),
+      ]);
+
+      if (classesResult.error) throw classesResult.error;
+      if (subjectsResult.error) throw subjectsResult.error;
+      if (assignmentsResult.error) throw assignmentsResult.error;
+
+      setAssignedClasses((classesResult.data ?? []) as AssignedClass[]);
+      setAssignedSubjects((subjectsResult.data ?? []) as AssignedSubject[]);
+      setSubjectAssignments((assignmentsResult.data ?? []) as SubjectAssignment[]);
 
       if (person.photo_path) {
         const { data: signed, error: photoError } = await supabase.storage
@@ -683,7 +717,10 @@ export default function TeacherDetailsScreen() {
               <Pressable
                 style={styles.iconButton}
                 onPress={() =>
-                  router.push(`/edit-teacher/${staff.id}` as never)
+                  router.push({
+                    pathname: "/add-teacher",
+                    params: { id: staff.id },
+                  })
                 }
               >
                 <Feather name="edit-2" size={25} color={WHITE} />
@@ -750,6 +787,67 @@ export default function TeacherDetailsScreen() {
             </Pressable>
           </View>
         </LinearGradient>
+
+        <View style={styles.card}>
+          <View style={styles.assignedHeader}>
+            <View style={styles.assignedHeaderIcon}>
+              <Feather name="book-open" size={19} color="#208395" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.assignedHeading}>Assigned Subjects</Text>
+              <Text style={styles.assignedSubheading}>Class-wise teaching assignments</Text>
+            </View>
+            <View style={styles.assignmentCount}>
+              <Text style={styles.assignmentCountText}>{subjectAssignments.length}</Text>
+            </View>
+          </View>
+
+          {subjectAssignments.length === 0 ? (
+            <View style={styles.noAssignedSubjects}>
+              <Feather name="book" size={20} color="#879AAA" />
+              <Text style={styles.noAssignedSubjectsText}>No subjects assigned to this teacher yet.</Text>
+            </View>
+          ) : (
+            assignedClasses
+              .filter((classItem) =>
+                subjectAssignments.some((assignment) => assignment.class_id === classItem.id)
+              )
+              .map((classItem) => {
+                const classSubjects = assignedSubjects.filter((subject) =>
+                  subject.class_id === classItem.id &&
+                  subjectAssignments.some((assignment) =>
+                    assignment.class_id === classItem.id && assignment.subject_id === subject.id
+                  )
+                );
+
+                if (classSubjects.length === 0) return null;
+
+                return (
+                  <View key={classItem.id} style={styles.assignedClassCard}>
+                    <View style={styles.assignedClassHeader}>
+                      <View style={styles.assignedClassIcon}>
+                        <Feather name="layers" size={17} color={WHITE} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.assignedClassName}>{classItem.name}</Text>
+                        <Text style={styles.assignedClassMeta}>
+                          {classSubjects.length} {classSubjects.length === 1 ? "subject" : "subjects"} assigned
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.assignedSubjectList}>
+                      {classSubjects.map((subject) => (
+                        <View key={subject.id} style={styles.assignedSubjectCard}>
+                          <Text style={styles.assignedSubjectName}>{subject.name}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                );
+              })
+          )}
+        </View>
 
         <View style={styles.card}>
           <View style={styles.salaryTop}>
@@ -1337,7 +1435,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 12,
   },
-  hero: { paddingHorizontal: 25, paddingTop: 16, paddingBottom: 28 },
+  hero: { paddingHorizontal: 25, paddingTop: 35, paddingBottom: 15, borderBottomRightRadius: 20,  borderBottomLeftRadius: 20,},
   toolbar: {
     height: 48,
     flexDirection: "row",
@@ -1364,14 +1462,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#31475C",
   },
   avatarFallback: { alignItems: "center", justifyContent: "center" },
-  personName: { fontSize: 27, fontWeight: "800", color: WHITE },
+  personName: { fontSize: 24, fontWeight: "800", color: WHITE },
   personMeta: { fontSize: 15, color: "#A7BAC7", marginTop: 5 },
   contactRow: { flexDirection: "row", gap: 12, marginTop: 22 },
   whatsapp: {
     flex: 1,
-    height: 58,
+    height: 50,
     borderRadius: 19,
-    backgroundColor: "#E9F7EF",
+    backgroundColor: "#00ff6e",
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -1380,9 +1478,9 @@ const styles = StyleSheet.create({
   whatsappText: { fontSize: 17, fontWeight: "700", color: "#14764F" },
   callButton: {
     flex: 1,
-    height: 58,
+    height: 50,
     borderRadius: 19,
-    backgroundColor: "#293B50",
+    backgroundColor: "#0077ff",
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -1397,6 +1495,96 @@ const styles = StyleSheet.create({
     backgroundColor: WHITE,
     borderWidth: 1,
     borderColor: BORDER,
+  },
+  assignedHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 16,
+  },
+  assignedHeaderIcon: {
+    width: 39,
+    height: 39,
+    borderRadius: 13,
+    backgroundColor: "#E6F4F4",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  assignedHeading: { fontSize: 18, fontWeight: "800", color: NAVY },
+  assignedSubheading: { fontSize: 12, color: MUTED, marginTop: 3 },
+  assignmentCount: {
+    minWidth: 29,
+    height: 29,
+    paddingHorizontal: 8,
+    borderRadius: 15,
+    backgroundColor: "#E5F6E9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  assignmentCountText: { fontSize: 12, fontWeight: "800", color: "#247A3C" },
+  noAssignedSubjects: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: "#F5F8FA",
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  noAssignedSubjectsText: { flex: 1, fontSize: 13, color: MUTED, lineHeight: 19 },
+  assignedClassCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#DCE7EE",
+    backgroundColor: "#F8FAFC",
+    padding: 12,
+    marginBottom: 11,
+  },
+  assignedClassHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingBottom: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E7EDF2",
+  },
+  assignedClassIcon: {
+    width: 35,
+    height: 35,
+    borderRadius: 11,
+    backgroundColor: NAVY,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  assignedClassName: { fontSize: 15, fontWeight: "800", color: NAVY },
+  assignedClassMeta: { fontSize: 11, color: MUTED, marginTop: 3 },
+  assignedSubjectList: {
+    paddingTop: 10,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    rowGap: 8,
+  },
+  assignedSubjectCard: {
+    width: "31.8%",
+    minHeight: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 5,
+    paddingVertical: 7,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "#E4EBF0",
+    backgroundColor: WHITE,
+  },
+  assignedSubjectName: {
+    width: "100%",
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#35495B",
+    textAlign: "center",
   },
   salaryTop: {
     flexDirection: "row",
@@ -1445,7 +1633,7 @@ const styles = StyleSheet.create({
   blankDay: { width: "14.2857%", height: 65 },
   calendarDay: {
     width: "13.1%",
-    height: 65,
+    height: 45,
     marginHorizontal: "0.59%",
     marginVertical: 3,
     borderRadius: 13,
