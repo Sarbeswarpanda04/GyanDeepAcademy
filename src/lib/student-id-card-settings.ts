@@ -7,10 +7,7 @@ export type StudentIdCardSettings = {
   showAddress: boolean;
   showDateOfBirth: boolean;
   showGender: boolean;
-  showClass: boolean;
-  useCourseLabel: boolean;
   showAdmissionDate: boolean;
-  showSeatNumber: boolean;
 };
 
 export const DEFAULT_STUDENT_ID_CARD_SETTINGS: StudentIdCardSettings = {
@@ -20,10 +17,7 @@ export const DEFAULT_STUDENT_ID_CARD_SETTINGS: StudentIdCardSettings = {
   showAddress: true,
   showDateOfBirth: true,
   showGender: true,
-  showClass: true,
-  useCourseLabel: true,
   showAdmissionDate: true,
-  showSeatNumber: true,
 };
 
 const storageKey = (instituteId: string) =>
@@ -40,10 +34,20 @@ export async function loadStudentIdCardSettings(
     throw new Error("Saved ID card settings are invalid.");
   }
 
+  const saved = parsed as Partial<StudentIdCardSettings>;
   return {
     ...DEFAULT_STUDENT_ID_CARD_SETTINGS,
-    ...parsed,
-  } as StudentIdCardSettings;
+    showFatherName: saved.showFatherName ?? true,
+    showBloodGroup: saved.showBloodGroup ?? true,
+    showAddress: saved.showAddress ?? true,
+    showDateOfBirth: saved.showDateOfBirth ?? true,
+    showGender: saved.showGender ?? true,
+    showAdmissionDate: saved.showAdmissionDate ?? true,
+    template:
+      saved.template === "horizontal" || saved.template === "vertical"
+        ? saved.template
+        : DEFAULT_STUDENT_ID_CARD_SETTINGS.template,
+  };
 }
 
 export async function saveStudentIdCardSettings(

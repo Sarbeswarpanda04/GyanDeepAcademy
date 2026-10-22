@@ -39,10 +39,7 @@ const fieldOptions: {
   { key: "showAddress", label: "Address" },
   { key: "showDateOfBirth", label: "Date of birth" },
   { key: "showGender", label: "Gender" },
-  { key: "showClass", label: "Class" },
-  { key: "useCourseLabel", label: 'Label class as "Course"' },
   { key: "showAdmissionDate", label: "Admission date" },
-  { key: "showSeatNumber", label: "Seat number" },
 ];
 
 function TemplatePreview({ horizontal }: { horizontal: boolean }) {
@@ -245,7 +242,7 @@ export default function StudentIdCardSettingsScreen() {
             </Text>
             <Text style={styles.description}>
               Choose which optional details print on every student&apos;s ID card.
-              Name, phone, roll number, and batch are always shown.
+              Name, phone, class, roll number, and batch are always shown.
             </Text>
             <View style={styles.fieldsCard}>
               {fieldOptions.map((field, index) => {

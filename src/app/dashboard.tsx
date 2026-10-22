@@ -101,7 +101,7 @@ export default function DashboardScreen() {
     {
       title: "Teacher / Staff",
       icon: "briefcase",
-      route: "/teachers",
+      route: "/teacher",
       color: "#EDF5F5",
       iconColor: "#208395",
     },
@@ -126,6 +126,7 @@ export default function DashboardScreen() {
     {
       title: "Birthdays",
       icon: "gift",
+      route: "/birthdays",
       color: "#F9EDF2",
       iconColor: "#C2185B",
     },

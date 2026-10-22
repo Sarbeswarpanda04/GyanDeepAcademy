@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef } from "react";
 import {
   Animated,
@@ -76,7 +75,6 @@ export default function AppAlert({
     }
 
     closing.current = false;
-
     const animation = Animated.parallel([
       Animated.timing(opacity, {
         toValue: 1,
@@ -95,9 +93,7 @@ export default function AppAlert({
         useNativeDriver: true,
       }),
     ]);
-
     animation.start();
-
     return () => animation.stop();
   }, [visible, opacity, scale, translateY]);
 
@@ -106,7 +102,6 @@ export default function AppAlert({
   const dismiss = (confirmed: boolean) => {
     if (closing.current) return;
     closing.current = true;
-
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: 0,
@@ -125,11 +120,8 @@ export default function AppAlert({
       }),
     ]).start(({ finished }) => {
       if (finished) {
-        if (confirmed && onConfirm) {
-          onConfirm();
-        } else {
-          onCancel();
-        }
+        if (confirmed && onConfirm) onConfirm();
+        else onCancel();
       }
       closing.current = false;
     });
@@ -155,49 +147,27 @@ export default function AppAlert({
           accessibilityRole="alert"
           style={[
             styles.card,
-            {
-              opacity,
-              transform: [{ scale }, { translateY }],
-            },
+            { opacity, transform: [{ scale }, { translateY }] },
           ]}
         >
-          <LinearGradient
-            colors={["#FFFFFF", "#F3F8FF"]}
-            style={styles.cardGradient}
-          >
+          <LinearGradient colors={["#FFFFFF", "#F3F8FF"]} style={styles.cardGradient}>
             <View style={[styles.iconCircle, { backgroundColor: theme.bg }]}>
               <Feather name={theme.icon} size={29} color={theme.color} />
             </View>
-
             <Text style={styles.title}>{title}</Text>
             <Text style={styles.message}>{message}</Text>
-
             <View style={styles.actions}>
-              {cancelLabel && (
-                <Pressable
-                  onPress={() => dismiss(false)}
-                  style={styles.cancelButton}
-                >
+              {cancelLabel ? (
+                <Pressable onPress={() => dismiss(false)} style={styles.cancelButton}>
                   <Text style={styles.cancelText}>{cancelLabel}</Text>
                 </Pressable>
-              )}
-
-              <Pressable
-                onPress={() => dismiss(true)}
-                style={styles.confirmWrap}
-              >
-                <LinearGradient
-                  colors={theme.button}
-                  style={styles.confirmButton}
-                >
+              ) : null}
+              <Pressable onPress={() => dismiss(true)} style={styles.confirmWrap}>
+                <LinearGradient colors={theme.button} style={styles.confirmButton}>
                   <Text style={[styles.confirmText, { color: theme.color }]}>
                     {confirmLabel}
                   </Text>
-                  <Feather
-                    name="arrow-right"
-                    size={16}
-                    color={theme.color}
-                  />
+                  <Feather name="arrow-right" size={16} color={theme.color} />
                 </LinearGradient>
               </Pressable>
             </View>
@@ -209,92 +179,22 @@ export default function AppAlert({
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 25,
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(22, 48, 79, 0.38)",
-  },
+  overlay: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 25 },
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(22, 48, 79, 0.38)" },
   card: {
-    width: "100%",
-    maxWidth: 370,
-    borderRadius: 26,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#DCEBFA",
-    elevation: 18,
-    shadowColor: "#173B65",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2,
-    shadowRadius: 20,
+    width: "100%", maxWidth: 370, borderRadius: 26, overflow: "hidden",
+    borderWidth: 1, borderColor: "#DCEBFA", elevation: 18,
+    shadowColor: "#173B65", shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2, shadowRadius: 20,
   },
-  cardGradient: {
-    alignItems: "center",
-    paddingHorizontal: 23,
-    paddingTop: 27,
-    paddingBottom: 22,
-  },
-  iconCircle: {
-    width: 67,
-    height: 67,
-    borderRadius: 23,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 17,
-  },
-  title: {
-    fontSize: 21,
-    fontWeight: "800",
-    color: "#173B65",
-    textAlign: "center",
-  },
-  message: {
-    color: "#71859D",
-    fontSize: 13,
-    lineHeight: 21,
-    textAlign: "center",
-    marginTop: 10,
-  },
-  actions: {
-    flexDirection: "row",
-    width: "100%",
-    gap: 10,
-    marginTop: 25,
-  },
-  cancelButton: {
-    flex: 1,
-    minHeight: 47,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#DCE8F5",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#FFFFFF",
-  },
-  cancelText: {
-    color: "#58718D",
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  confirmWrap: {
-    flex: 1,
-    borderRadius: 14,
-    overflow: "hidden",
-  },
-  confirmButton: {
-    minHeight: 47,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingHorizontal: 12,
-  },
-  confirmText: {
-    fontSize: 13,
-    fontWeight: "800",
-  },
+  cardGradient: { alignItems: "center", paddingHorizontal: 23, paddingTop: 27, paddingBottom: 22 },
+  iconCircle: { width: 67, height: 67, borderRadius: 23, alignItems: "center", justifyContent: "center", marginBottom: 17 },
+  title: { fontSize: 21, fontWeight: "800", color: "#173B65", textAlign: "center" },
+  message: { color: "#71859D", fontSize: 13, lineHeight: 21, textAlign: "center", marginTop: 10 },
+  actions: { flexDirection: "row", width: "100%", gap: 10, marginTop: 25 },
+  cancelButton: { flex: 1, minHeight: 47, borderRadius: 14, borderWidth: 1, borderColor: "#DCE8F5", alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFF" },
+  cancelText: { color: "#58718D", fontSize: 13, fontWeight: "700" },
+  confirmWrap: { flex: 1, borderRadius: 14, overflow: "hidden" },
+  confirmButton: { minHeight: 47, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 12 },
+  confirmText: { fontSize: 13, fontWeight: "800" },
 });
