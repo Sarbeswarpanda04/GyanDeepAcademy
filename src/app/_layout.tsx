@@ -1,6 +1,24 @@
+
+import { useEffect } from "react";
 import { Stack } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
+
+// Keep the native splash screen visible while the app initializes.
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
+  useEffect(() => {
+    async function prepareApp() {
+      try {
+        // Add essential startup initialization here if required.
+      } finally {
+        await SplashScreen.hideAsync();
+      }
+    }
+
+    prepareApp();
+  }, []);
+
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />

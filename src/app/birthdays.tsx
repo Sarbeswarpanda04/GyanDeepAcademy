@@ -428,7 +428,7 @@ export default function BirthdaysScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: BG },
   header: {
-    paddingTop: 12,
+    paddingTop: 35,
     paddingHorizontal: 16,
     paddingBottom: 14,
     flexDirection: "row",

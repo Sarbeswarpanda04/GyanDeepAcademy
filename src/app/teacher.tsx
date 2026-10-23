@@ -179,7 +179,7 @@ export default function TeacherScreen() {
 
         <Pressable
           style={styles.attendance}
-          onPress={() => router.push("/attendance" as never)}
+          onPress={() => router.push("/staff-attendance" as never)}
         >
           <View style={styles.calendar}>
             <Feather name="calendar" size={26} color={WHITE} />
@@ -378,7 +378,7 @@ const styles = StyleSheet.create({
   attendance: {
     marginHorizontal: 18,
     marginTop: 22,
-    padding: 16,
+    padding: 5,
     borderRadius: 24,
     backgroundColor: "#293B50",
     flexDirection: "row",

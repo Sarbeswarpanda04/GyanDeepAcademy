@@ -1,5 +1,5 @@
 
-import { useCallback, useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   Image,
   StatusBar,
@@ -69,9 +69,9 @@ export default function InstituteHeader({
       if (error) throw error;
       if (!data) return;
 
-      let logoUrl: string | null = data.logo_url;
+      let logoUrl: string | null = data.logo_url ?? null;
 
-      // Convert a private Storage object path into a fresh signed URL.
+      // Resolve private Storage paths into signed URLs.
       if (logoUrl && !/^https?:\/\//i.test(logoUrl)) {
         const { data: signedData, error: signedError } =
           await supabase.storage
@@ -79,7 +79,9 @@ export default function InstituteHeader({
             .createSignedUrl(logoUrl, 3600);
 
         logoUrl =
-          signedError || !signedData ? null : signedData.signedUrl;
+          signedError || !signedData
+            ? null
+            : signedData.signedUrl;
       }
 
       setBrand({
@@ -97,8 +99,16 @@ export default function InstituteHeader({
     }, [loadBrand])
   );
 
+  const handleSupportPress = () => {
+    if (onSupportPress) {
+      onSupportPress();
+    } else {
+      router.push("/settings" as never);
+    }
+  };
+
   return (
-    <View>
+    <View style={styles.wrapper}>
       <StatusBar
         barStyle="light-content"
         backgroundColor={NAVY}
@@ -106,8 +116,7 @@ export default function InstituteHeader({
       />
 
       <View style={styles.container}>
-        <View style={styles.topAccent} />
-
+        {/* Institute logo */}
         <View style={styles.logoFrame}>
           {brand.logo_url ? (
             <Image
@@ -125,10 +134,11 @@ export default function InstituteHeader({
           )}
         </View>
 
+        {/* Institute name and subtitle */}
         <View style={styles.textContainer}>
           <Text
             style={styles.instituteName}
-            numberOfLines={1}
+            numberOfLines={2}
             adjustsFontSizeToFit
             minimumFontScale={0.8}
           >
@@ -143,17 +153,20 @@ export default function InstituteHeader({
           </View>
         </View>
 
+        {/* Support button */}
         {showSupport && (
           <TouchableOpacity
             style={styles.supportButton}
             accessibilityRole="button"
             accessibilityLabel="Help and support"
             activeOpacity={0.75}
-            onPress={
-              onSupportPress ?? (() => router.push("/settings"))
-            }
+            onPress={handleSupportPress}
           >
-            <Feather name="help-circle" size={22} color={WHITE} />
+            <Feather
+              name="help-circle"
+              size={23}
+              color={WHITE}
+            />
           </TouchableOpacity>
         )}
       </View>
@@ -162,31 +175,27 @@ export default function InstituteHeader({
 }
 
 const styles = StyleSheet.create({
+  wrapper: {
+    backgroundColor: NAVY,
+  },
+
   container: {
     width: "100%",
-    minHeight: 91,
+    minHeight: 100,
     backgroundColor: NAVY,
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
     paddingTop: 35,
-    paddingBottom: 14,
+    paddingBottom: 10,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    overflow: "hidden",
   },
-  topAccent: {
-    position: "absolute",
-    top: 0,
-    left: 1,
-    right: 1,
-    height: 30,
-    borderRadius: 2,
-    backgroundColor: GOLD,
-  },
+
   logoFrame: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
+    width: 54,
+    height: 54,
+    flexShrink: 0,
+    borderRadius: 15,
     backgroundColor: WHITE,
     borderWidth: 1,
     borderColor: "#E5D8B7",
@@ -194,14 +203,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     overflow: "hidden",
   },
+
   logo: {
     width: "100%",
     height: "100%",
   },
+
   fallbackLogo: {
     alignItems: "center",
     justifyContent: "center",
   },
+
   fallbackText: {
     color: NAVY,
     fontSize: 23,
@@ -209,6 +221,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: -1,
   },
+
   logoAccent: {
     width: 24,
     height: 2,
@@ -216,6 +229,7 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     marginTop: 1,
   },
+
   logoCaption: {
     color: "#947326",
     fontSize: 6,
@@ -223,30 +237,35 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     marginTop: 2,
   },
+
   textContainer: {
     flex: 1,
     minWidth: 0,
     justifyContent: "center",
   },
+
   instituteName: {
     color: WHITE,
     fontSize: 17,
-    lineHeight: 23,
+    lineHeight: 22,
     fontWeight: "800",
     letterSpacing: 0.1,
   },
+
   subtitleRow: {
     flexDirection: "row",
     alignItems: "center",
     marginTop: 5,
     gap: 6,
   },
+
   statusDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
     backgroundColor: GOLD,
   },
+
   subtitle: {
     flex: 1,
     color: MUTED,
@@ -254,9 +273,11 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     letterSpacing: 0.2,
   },
+
   supportButton: {
     width: 42,
     height: 42,
+    flexShrink: 0,
     borderRadius: 14,
     backgroundColor: NAVY_LIGHT,
     borderWidth: 1,

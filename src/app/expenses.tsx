@@ -34,7 +34,7 @@ const N = "#202F42",
   R = "#D95362",
   W = "#FFFFFF",
   BUCKET = "institute-assets";
-type Mode = "Cash" | "UPI" | "Bank transfer" | "Card" | "Cheque" | "Other";
+type Mode = "Cash" | "UPI" | "Bank transfer" | "Card" | "Other";
 type Expense = {
   id: string;
   institute_id: string;
@@ -53,7 +53,6 @@ const MODES: Mode[] = [
   "UPI",
   "Bank transfer",
   "Card",
-  "Cheque",
   "Other",
 ];
 const money = (n: number) =>
@@ -663,7 +662,7 @@ export default function ExpensesScreen() {
                   setImageUrl(null);
                 }}
               >
-                <Text style={{ color: R, marginTop: 7 }}>Remove image</Text>
+                <Text style={{ color: R, marginTop: 7, }}>Remove image</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
@@ -847,19 +846,19 @@ const s = StyleSheet.create({
     padding: 13,
   },
   row: { flexDirection: "row", alignItems: "center", gap: 10 },
-  thumb: { width: 50, height: 50, borderRadius: 13 },
+  thumb: { width: 100, height: 100, borderRadius: 13 },
   thumbBlank: {
-    width: 50,
-    height: 50,
+    width: 70,
+    height: 70,
     borderRadius: 13,
     backgroundColor: "#E9EFF5",
     alignItems: "center",
     justifyContent: "center",
   },
-  itemName: { color: N, fontSize: 15, fontWeight: "900" },
-  meta: { color: M, fontSize: 11, marginTop: 4 },
-  amount: { color: G, fontSize: 13, fontWeight: "900" },
-  desc: { color: "#58697A", fontSize: 12, marginTop: 9, lineHeight: 17 },
+  itemName: { color: N, fontSize: 18, fontWeight: "900" },
+  meta: { color: M, fontSize: 14, marginTop: 4 },
+  amount: { color: G, fontSize: 18, fontWeight: "900" },
+  desc: { color: "#58697A", fontSize: 12, marginTop: 2, lineHeight: 17 },
   actions: {
     borderTopWidth: 1,
     borderTopColor: "#EEF2F6",
@@ -1031,8 +1030,8 @@ const s = StyleSheet.create({
     backgroundColor: "#FBFCFE",
   },
   sourceIcon: {
-    width: 46,
-    height: 46,
+    width: 60,
+    height: 60,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
@@ -1040,7 +1039,7 @@ const s = StyleSheet.create({
   sourceOptionTitle: { color: N, fontSize: 14, fontWeight: "900" },
   sourceOptionSub: { color: M, fontSize: 11, marginTop: 4 },
   sourceCancel: {
-    minHeight: 46,
+    minHeight: 60,
     borderRadius: 14,
     backgroundColor: "#F0F3F6",
     alignItems: "center",
