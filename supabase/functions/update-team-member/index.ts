@@ -1,4 +1,3 @@
-
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -11,7 +10,7 @@ const corsHeaders = {
 function jsonResponse(
   body: Record<string, unknown>,
   status = 200,
-) {
+): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
@@ -21,7 +20,7 @@ function jsonResponse(
   });
 }
 
-Deno.serve(async (req: Request) => {
+Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -40,28 +39,18 @@ Deno.serve(async (req: Request) => {
   }
 
   const authorization = req.headers.get("Authorization");
-
   if (!authorization?.startsWith("Bearer ")) {
     return jsonResponse({ error: "Authentication required." }, 401);
   }
 
-  // Use the caller's JWT to identify the current user.
   const userClient = createClient(supabaseUrl, anonKey, {
-    global: {
-      headers: { Authorization: authorization },
-    },
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
+    global: { headers: { Authorization: authorization } },
+    auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  // Privileged client: never expose its key to the mobile app.
+  // This service-role client must remain server-side only.
   const admin = createClient(supabaseUrl, serviceRoleKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
+    auth: { persistSession: false, autoRefreshToken: false },
   });
 
   try {
@@ -74,16 +63,25 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Invalid or expired session." }, 401);
     }
 
-    const body = await req.json();
+    let body: Record<string, unknown>;
+    try {
+      const parsed = await req.json();
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return jsonResponse({ error: "Invalid request body." }, 400);
+      }
+      body = parsed as Record<string, unknown>;
+    } catch {
+      return jsonResponse({ error: "Request body must be valid JSON." }, 400);
+    }
 
     const instituteId =
-      typeof body.instituteId === "string" ? body.instituteId : "";
+      typeof body.instituteId === "string" ? body.instituteId.trim() : "";
     const memberId =
-      typeof body.memberId === "string" ? body.memberId : "";
+      typeof body.memberId === "string" ? body.memberId.trim() : "";
     const fullName =
       typeof body.fullName === "string" ? body.fullName.trim() : "";
     const phone =
-      typeof body.phone === "string" ? body.phone.trim() : "";
+      typeof body.phone === "string" ? body.phone.replace(/\D/g, "").slice(-10) : "";
     const staffId =
       typeof body.staffId === "string" && body.staffId.trim()
         ? body.staffId.trim()
@@ -115,24 +113,21 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Invalid permissions format." }, 400);
     }
 
-    // A missing or blank PIN means "keep the current PIN".
-    const changePin =
-      typeof pin === "string" && pin.length > 0;
-
-    if (changePin && !/^\d{4}$/.test(pin)) {
+    // A missing or empty PIN means keep the current PIN.
+    const changePin = typeof pin === "string" && pin.length > 0;
+    if (changePin && !/^\d{4}$/.test(pin as string)) {
       return jsonResponse({
         error: "The PIN must contain exactly 4 digits.",
       }, 400);
     }
 
-    // Verify the caller's institute membership and role.
-    const { data: callerMembership, error: membershipError } =
-      await admin
-        .from("institute_members")
-        .select("id, institute_id, user_id, role")
-        .eq("institute_id", instituteId)
-        .eq("user_id", user.id)
-        .maybeSingle();
+    // Verify caller's membership and permissions for this institute.
+    const { data: callerMembership, error: membershipError } = await admin
+      .from("institute_members")
+      .select("id, institute_id, user_id, role")
+      .eq("institute_id", instituteId)
+      .eq("user_id", user.id)
+      .maybeSingle();
 
     if (membershipError) {
       console.error("Membership lookup failed:", membershipError.message);
@@ -141,23 +136,17 @@ Deno.serve(async (req: Request) => {
       }, 500);
     }
 
-    if (
-      !callerMembership ||
-      !["owner", "manager"].includes(
-        String(callerMembership.role).toLowerCase(),
-      )
-    ) {
+    const callerRole = String(callerMembership?.role ?? "").toLowerCase();
+    if (!callerMembership || !["owner", "manager"].includes(callerRole)) {
       return jsonResponse({
         error: "You are not authorized to edit team members.",
       }, 403);
     }
 
-    // Find the active team member within this institute.
+    // Confirm the target is active and belongs to this institute.
     const { data: member, error: memberError } = await admin
       .from("institute_team_members")
-      .select(
-        "id, institute_id, role, staff_id, user_id, is_active",
-      )
+      .select("id, institute_id, role, staff_id, user_id, is_active")
       .eq("id", memberId)
       .eq("institute_id", instituteId)
       .eq("is_active", true)
@@ -165,9 +154,7 @@ Deno.serve(async (req: Request) => {
 
     if (memberError) {
       console.error("Member lookup failed:", memberError.message);
-      return jsonResponse({
-        error: "Unable to load the team member.",
-      }, 500);
+      return jsonResponse({ error: "Unable to load the team member." }, 500);
     }
 
     if (!member) {
@@ -176,16 +163,17 @@ Deno.serve(async (req: Request) => {
       }, 404);
     }
 
-    const callerRole = String(callerMembership.role).toLowerCase();
-    const memberRole = String(member.role).toLowerCase();
-
+    const memberRole = String(member.role ?? "").toLowerCase();
     if (callerRole === "manager" && memberRole !== "teacher") {
       return jsonResponse({
         error: "Managers can edit teachers only.",
       }, 403);
     }
 
-    // Teachers must be linked to a valid active staff record.
+    // Teacher records must reference a staff row in the same institute.
+    // Do not query institute_staff.is_active: that column does not exist.
+    let verifiedStaffId: string | null = null;
+
     if (memberRole === "teacher") {
       if (!staffId) {
         return jsonResponse({
@@ -195,7 +183,7 @@ Deno.serve(async (req: Request) => {
 
       const { data: staff, error: staffError } = await admin
         .from("institute_staff")
-        .select("id, institute_id, phone, is_active")
+        .select("id, institute_id, phone")
         .eq("id", staffId)
         .eq("institute_id", instituteId)
         .maybeSingle();
@@ -207,9 +195,9 @@ Deno.serve(async (req: Request) => {
         }, 500);
       }
 
-      if (!staff || staff.is_active !== true) {
+      if (!staff) {
         return jsonResponse({
-          error: "Selected staff member is inactive or does not exist.",
+          error: "Selected staff member does not exist in this institute.",
         }, 400);
       }
 
@@ -217,20 +205,22 @@ Deno.serve(async (req: Request) => {
         .replace(/\D/g, "")
         .slice(-10);
 
-      if (staffPhone !== phone) {
+      if (!staffPhone || staffPhone !== phone) {
         return jsonResponse({
           error: "Mobile number must match the selected staff record.",
         }, 400);
       }
+
+      verifiedStaffId = String(staff.id);
     }
 
-    // Update member details without changing their assigned role.
+    // Update the team member without allowing the role or institute to change.
     const { data: updatedMember, error: updateError } = await admin
       .from("institute_team_members")
       .update({
         full_name: fullName,
         phone,
-        staff_id: memberRole === "teacher" ? staffId : null,
+        staff_id: verifiedStaffId,
         permissions,
         updated_at: new Date().toISOString(),
       })
@@ -240,18 +230,18 @@ Deno.serve(async (req: Request) => {
       .select("id, full_name, phone, role, permissions")
       .maybeSingle();
 
-    if (updateError || !updatedMember) {
-      console.error(
-        "Team member update failed:",
-        updateError?.message ?? "No row updated",
-      );
-      return jsonResponse({
-        error: "Failed to update the team member.",
-      }, 500);
+    if (updateError) {
+      console.error("Team member update failed:", updateError.message);
+      return jsonResponse({ error: "Failed to update the team member." }, 500);
     }
 
-    // Change the PIN only when the owner/manager supplied a new one.
-    // The internal Auth password remains unchanged.
+    if (!updatedMember) {
+      return jsonResponse({
+        error: "No active team member was updated. Refresh and try again.",
+      }, 404);
+    }
+
+    // Change only the PIN. Do not alter the internal Auth password.
     if (changePin) {
       const { data: credential, error: credentialLookupError } = await admin
         .from("institute_team_credentials")
@@ -259,21 +249,27 @@ Deno.serve(async (req: Request) => {
         .eq("team_member_id", memberId)
         .maybeSingle();
 
-      if (credentialLookupError || !credential) {
+      if (credentialLookupError) {
         console.error(
           "Credential lookup failed:",
-          credentialLookupError?.message ?? "Credential row missing",
+          credentialLookupError.message,
         );
-
         return jsonResponse({
           error:
-            "Member details were updated, but PIN credentials could not be verified. Check the credentials table before retrying.",
+            "Member details were updated, but PIN credentials could not be verified.",
+        }, 500);
+      }
+
+      if (!credential) {
+        return jsonResponse({
+          error:
+            "Member details were updated, but no PIN credential row exists for this member.",
         }, 500);
       }
 
       const { error: pinUpdateError } = await admin
         .from("institute_team_credentials")
-        .update({ login_pin: pin })
+        .update({ login_pin: pin as string })
         .eq("team_member_id", memberId);
 
       if (pinUpdateError) {
@@ -293,11 +289,8 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     console.error(
       "Unexpected update-team-member error:",
-      error instanceof Error ? error.message : error,
+      error instanceof Error ? error.stack ?? error.message : error,
     );
-
-    return jsonResponse({
-      error: "An unexpected server error occurred.",
-    }, 500);
+    return jsonResponse({ error: "An unexpected server error occurred." }, 500);
   }
 });

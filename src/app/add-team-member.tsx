@@ -372,18 +372,26 @@ export default function AddTeamMemberScreen() {
           const context = error.context;
           if (context && typeof context.clone === "function") {
             const response = context.clone();
-            const contentType = response.headers.get("content-type") ?? "";
+            const responseText = await response.text();
 
-            if (contentType.includes("application/json")) {
-              const body = await response.json();
-              message = body?.message ?? message;
-            } else {
-              const body = (await response.text()).trim();
-              if (body) message = body;
+            console.error(`[${functionName}] HTTP status:`, response.status);
+            console.error(`[${functionName}] Response body:`, responseText);
+
+            if (responseText) {
+              try {
+                const body = JSON.parse(responseText);
+                // Edge Functions commonly return { error: "..." }, not only { message: "..." }.
+                message = body?.error ?? body?.message ?? message;
+              } catch {
+                message = responseText;
+              }
             }
           }
-        } catch {
-          // Keep the original error message.
+        } catch (diagnosticError) {
+          console.error(
+            `[${functionName}] Could not read error response:`,
+            diagnosticError,
+          );
         }
 
         throw new Error(message);
@@ -391,7 +399,8 @@ export default function AddTeamMemberScreen() {
 
       if (!data?.success) {
         throw new Error(
-          data?.message ??
+          data?.error ??
+            data?.message ??
             `The server did not confirm that the member was ${
               isEdit ? "updated" : "added"
             }.`,
@@ -410,7 +419,7 @@ export default function AddTeamMemberScreen() {
         () => router.replace("/team" as never),
       );
     } catch (error: any) {
-      console.error("[add-team-member]", error);
+      console.error(`[${isEdit ? "update-team-member" : "add-team-member"}]`, error);
       showAlert(
         isEdit ? "Could not update member" : "Could not add team member",
         readErrorMessage(error),

@@ -63,6 +63,7 @@ type Student = {
   full_name: string;
   roll_number: string | null;
   photo_path: string | null;
+  photo_url?: string | null;
   class_id: string;
   status: string;
 };
@@ -111,6 +112,7 @@ export default function AttendanceMarkingScreen() {
   const date = asText(params.date) || new Date().toISOString().slice(0, 10);
   const [instituteId, setInstituteId] = useState("");
   const [students, setStudents] = useState<Student[]>([]);
+  const [failedPhotos, setFailedPhotos] = useState<Record<string, boolean>>({});
   const [attendance, setAttendance] = useState<Record<string, StatusCode>>({});
   const [original, setOriginal] = useState<Record<string, StatusCode>>({});
   const [loading, setLoading] = useState(true);
@@ -182,7 +184,57 @@ export default function AttendanceMarkingScreen() {
       const enrolled = activeStudents
         .filter((s) => enrolledIds.has(s.id))
         .sort(rollSort);
-      setStudents(enrolled);
+
+      // Resolve the saved object path to a public URL. The student-photos
+      // bucket must be set to Public in Supabase Storage for this URL to load.
+      const normalizeStudentPhotoPath = (rawPath: string): string | null => {
+        let path = rawPath.trim();
+        if (!path) return null;
+
+        if (/^https?:\/\//i.test(path)) {
+          try {
+            const parsed = new URL(path);
+            const markers = [
+              "/storage/v1/object/sign/student-photos/",
+              "/storage/v1/object/public/student-photos/",
+              "/storage/v1/object/authenticated/student-photos/",
+            ];
+            const marker = markers.find((item) => parsed.pathname.includes(item));
+            if (!marker) return null;
+            path = parsed.pathname.slice(parsed.pathname.indexOf(marker) + marker.length);
+            path = decodeURIComponent(path);
+          } catch {
+            return null;
+          }
+        }
+
+        path = decodeURIComponent(path.split("?")[0])
+          .replace(/^\/+/, "")
+          .replace(/^student-photos\//, "");
+
+        if (!path.startsWith(`${iid}/`)) path = `${iid}/${path}`;
+        return path;
+      };
+
+      const studentsWithPhotos: Student[] = enrolled.map((student) => {
+        const storedPath = student.photo_path?.trim();
+        if (!storedPath) return { ...student, photo_url: null };
+
+        const objectPath = normalizeStudentPhotoPath(storedPath);
+        if (!objectPath) {
+          console.warn(`Unrecognized student photo path for ${student.id}:`, storedPath);
+          return { ...student, photo_url: null };
+        }
+
+        const { data } = supabase.storage
+          .from("student-photos")
+          .getPublicUrl(objectPath);
+
+        return { ...student, photo_url: data.publicUrl };
+      });
+
+      setFailedPhotos({});
+      setStudents(studentsWithPhotos);
 
       const { data: existing, error: attendanceError } = await supabase
         .from("institute_attendance_records")
@@ -366,10 +418,13 @@ export default function AttendanceMarkingScreen() {
             return (
               <View key={s.id} style={styles.studentCard}>
                 <View style={styles.avatar}>
-                  {s.photo_path ? (
+                  {s.photo_url && !failedPhotos[s.id] ? (
                     <Image
-                      source={{ uri: s.photo_path }}
+                      source={{ uri: s.photo_url }}
                       style={styles.avatarImage}
+                      onError={() =>
+                        setFailedPhotos((prev) => ({ ...prev, [s.id]: true }))
+                      }
                     />
                   ) : (
                     <Text style={styles.avatarText}>

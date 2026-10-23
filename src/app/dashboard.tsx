@@ -76,6 +76,7 @@ export default function DashboardScreen() {
     {
       title: "Exam/Test",
       icon: "clipboard",
+      route: "/exams",
       color: "#EFF2F4",
       iconColor: "#3E627A",
     },
@@ -155,6 +156,20 @@ export default function DashboardScreen() {
       color: "#F8F3ED",
       iconColor: "#B8761E",
     },
+    {
+      title: "Repair Teacher",
+      icon: "tool",
+      route: "/repair-teacher",
+      color: "#F4F0F8",
+      iconColor: "#8050B7",
+    },
+    {
+      title: "Expenses",
+      icon: "dollar-sign",
+      route: "/expenses",
+      color: "#F8F3ED",
+      iconColor: "#B8761E",
+    }
   ];
 
   const refreshDashboard = useCallback(() => {

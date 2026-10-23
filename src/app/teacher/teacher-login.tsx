@@ -136,7 +136,7 @@ export default function TeacherLoginScreen() {
       }
 
       // Open the dashboard only after Supabase accepts the session.
-      router.replace("/teacher-dashboard" as never);
+      router.replace("/teacher/teacher-dashboard" as never);
     } catch (error: unknown) {
       console.error("[teacher-login] failed:", error);
 
