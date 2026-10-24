@@ -2,7 +2,6 @@
 import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   KeyboardAvoidingView,
   Linking,
@@ -21,12 +20,12 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import ViewShot from "react-native-view-shot";
-import RNShare from "react-native-share";
 import { useFocusEffect } from "expo-router";
 
 import { supabase } from "../lib/supabase";
 import InstituteHeader from "../components/InstituteHeader";
 import FloatingTabBar from "../components/FloatingTabBar";
+import AppAlert from "../components/AppAlert";
 
 const NAVY = "#10264A";
 const GOLD = "#F3C969";
@@ -265,6 +264,50 @@ export default function FeesScreen() {
   const receiptViewRef = React.useRef<ViewShot>(null);
   const [canCollect, setCanCollect] = useState(false);
 
+  type AppAlertType = "success" | "error" | "info" | "warning";
+
+const [appAlert, setAppAlert] = useState<{
+  visible: boolean;
+  title: string;
+  message: string;
+  type: AppAlertType;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  onConfirm?: () => void;
+}>({
+  visible: false,
+  title: "",
+  message: "",
+  type: "info",
+});
+
+const showAppAlert = (
+  title: string,
+  message: string,
+  type: AppAlertType = "info",
+  options?: {
+    confirmLabel?: string;
+    cancelLabel?: string;
+    onConfirm?: () => void;
+  }
+) => {
+  setAppAlert({
+    visible: true,
+    title,
+    message,
+    type,
+    ...options,
+  });
+};
+
+const closeAppAlert = () => {
+  setAppAlert((previous) => ({
+    ...previous,
+    visible: false,
+    onConfirm: undefined,
+  }));
+};
+
   const [rows, setRows] = useState<FeeRow[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [fees, setFees] = useState<FeeSetting[]>([]);
@@ -297,7 +340,12 @@ export default function FeesScreen() {
   const [discountText, setDiscountText] = useState("0");
   const [editDueDate, setEditDueDate] = useState("");
   const [editDirty, setEditDirty] = useState(false);
-
+  const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
+const [showEditTransaction, setShowEditTransaction] = useState(false);
+const [transactionAmount, setTransactionAmount] = useState("");
+const [transactionDate, setTransactionDate] = useState("");
+const [transactionMethod, setTransactionMethod] = useState("cash");
+const [transactionNotes, setTransactionNotes] = useState("");
   const [lastReceipt, setLastReceipt] = useState<{
     student: Student;
     row: FeeRow;
@@ -533,7 +581,7 @@ export default function FeesScreen() {
 
   const openPayment = (row: FeeRow) => {
     if (!canCollect) {
-      Alert.alert("View only", "Only owners and managers can collect fees.");
+      showAppAlert("View only", "Only owners and managers can collect fees.", "warning");
       return;
     }
 
@@ -566,17 +614,17 @@ export default function FeesScreen() {
     const discount = Number(discountText || 0);
 
     if (!Number.isFinite(baseAmount) || baseAmount <= 0) {
-      Alert.alert("Invalid amount", "Enter a fee amount greater than zero.");
+      showAppAlert("Invalid amount", "Enter a fee amount greater than zero.", "error");
       return;
     }
 
     if (!Number.isFinite(discount) || discount < 0) {
-      Alert.alert("Invalid discount", "Enter a valid discount.");
+      showAppAlert("Invalid discount", "Enter a valid discount.", "error");
       return;
     }
 
     if (discountType === "percent" && discount > 100) {
-      Alert.alert("Invalid discount", "Percentage discount cannot exceed 100%.");
+      showAppAlert("Invalid discount", "Percentage discount cannot exceed 100%.", "error");
       return;
     }
 
@@ -586,12 +634,12 @@ export default function FeesScreen() {
         : baseAmount - discount;
 
     if (finalAmount < 0) {
-      Alert.alert("Invalid discount", "Discount cannot exceed the fee.");
+      showAppAlert("Invalid discount", "Discount cannot exceed the fee.", "error");
       return;
     }
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(editDueDate)) {
-      Alert.alert("Invalid date", "Use YYYY-MM-DD for the due date.");
+      showAppAlert("Invalid date", "Use YYYY-MM-DD for the due date.", "error");
       return;
     }
 
@@ -609,19 +657,198 @@ export default function FeesScreen() {
 
       if (error) throw error;
 
-      Alert.alert(
+      showAppAlert(
         "Fee amount saved",
-        "The final fee amount was saved. The discount breakdown and custom due-date override are not persisted by the current database schema."
+        "The final fee amount was saved. The discount breakdown and custom due-date override are not persisted by the current database schema.",
+        "success"
       );
 
       setShowEdit(false);
       await loadFees();
     } catch (error: any) {
-      Alert.alert("Unable to save changes", error?.message || "Please try again.");
+      showAppAlert("Unable to save changes", error?.message || "Please try again.", "error");
     } finally {
       setSaving(false);
     }
   };
+
+  const openEditTransaction = (payment: Payment) => {
+  if (!canCollect) {
+    showAppAlert(
+      "View only",
+      "Only owners and managers can edit transactions.",
+      "warning"
+    );
+    return;
+  }
+
+  setEditingPayment(payment);
+  setTransactionAmount(String(payment.amount_paid));
+  setTransactionDate(payment.payment_date.slice(0, 10));
+  setTransactionMethod(payment.payment_method || "cash");
+  setTransactionNotes(payment.notes || "");
+  setShowEditTransaction(true);
+};
+
+const saveTransactionEdit = async () => {
+  if (!editingPayment || !instituteId || !canCollect) return;
+
+  const amount = Number(transactionAmount);
+  const date = transactionDate.trim();
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    showAppAlert(
+      "Invalid amount",
+      "Enter a transaction amount greater than zero.",
+      "error"
+    );
+    return;
+  }
+
+  // Validate both the date format and the actual calendar date.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    showAppAlert("Invalid date", "Use YYYY-MM-DD for the payment date.", "error");
+    return;
+  }
+
+  const parsedDate = new Date(`${date}T00:00:00`);
+  if (
+    Number.isNaN(parsedDate.getTime()) ||
+    dateOnly(parsedDate) !== date
+  ) {
+    showAppAlert("Invalid date", "Enter a real calendar date.", "error");
+    return;
+  }
+
+  setSaving(true);
+
+  try {
+    // Load the current fee amount and other payments for this exact period.
+    const { data: feeRecord, error: feeError } = await supabase
+      .from("institute_student_fees")
+      .select("fee_amount")
+      .eq("id", editingPayment.student_fee_id)
+      .eq("institute_id", instituteId)
+      .maybeSingle();
+
+    if (feeError) throw feeError;
+    if (!feeRecord) {
+      throw new Error("The fee record could not be found.");
+    }
+
+    const { data: otherPayments, error: paymentsError } = await supabase
+      .from("institute_fee_payments")
+      .select("id, amount_paid")
+      .eq("institute_id", instituteId)
+      .eq("student_fee_id", editingPayment.student_fee_id)
+      .eq("billing_period_start", editingPayment.billing_period_start)
+      .eq("billing_period_end", editingPayment.billing_period_end)
+      .neq("id", editingPayment.id);
+
+    if (paymentsError) throw paymentsError;
+
+    const paidByOtherTransactions = (otherPayments ?? []).reduce(
+      (sum, payment) => sum + Number(payment.amount_paid || 0),
+      0
+    );
+
+    const feeAmount = Number(feeRecord.fee_amount);
+    if (paidByOtherTransactions + amount > feeAmount + 0.009) {
+      throw new Error(
+        `This amount would exceed the fee of ${money(feeAmount)}. ` +
+        `Other transactions total ${money(paidByOtherTransactions)}.`
+      );
+    }
+
+    const { error: updateError } = await supabase
+      .from("institute_fee_payments")
+      .update({
+        amount_paid: Math.round(amount * 100) / 100,
+        payment_date: date,
+        payment_method: transactionMethod,
+        notes: transactionNotes.trim() || null,
+      })
+      .eq("id", editingPayment.id)
+      .eq("institute_id", instituteId);
+
+    if (updateError) throw updateError;
+
+    setShowEditTransaction(false);
+    setEditingPayment(null);
+
+    await loadFees();
+
+    showAppAlert(
+      "Transaction updated",
+      "The payment transaction was updated successfully.",
+      "success"
+    );
+  } catch (error: any) {
+    showAppAlert(
+      "Unable to update transaction",
+      error?.message || "Please try again.",
+      "error"
+    );
+  } finally {
+    setSaving(false);
+  }
+};
+
+const deleteTransaction = (payment: Payment) => {
+  if (!canCollect) {
+    showAppAlert(
+      "View only",
+      "Only owners and managers can delete transactions.",
+      "warning"
+    );
+    return;
+  }
+
+  showAppAlert(
+    "Delete transaction?",
+    `Delete the payment of ${money(Number(payment.amount_paid))}? This action cannot be undone.`,
+    "warning",
+    {
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      onConfirm: () => {
+        void confirmDeleteTransaction(payment);
+      },
+    }
+  );
+};
+
+const confirmDeleteTransaction = async (payment: Payment) => {
+  if (!canCollect || !instituteId) return;
+
+  setSaving(true);
+
+  try {
+    const { error: deleteError } = await supabase
+      .from("institute_fee_payments")
+      .delete()
+      .eq("id", payment.id)
+      .eq("institute_id", instituteId);
+
+    if (deleteError) throw deleteError;
+
+    await loadFees();
+
+    showAppAlert(
+      "Transaction deleted",
+      "The payment was deleted and the fee balance has been recalculated.",
+      "success"
+    );
+  } catch (error: any) {
+    showAppAlert(
+      "Unable to delete transaction",
+      error?.message || "Please try again.",
+      "error"
+    );
+  } finally {
+    setSaving(false);
+  }
+};
 
   const collectPayment = async () => {
     if (!selected || !instituteId || !canCollect) return;
@@ -629,20 +856,21 @@ export default function FeesScreen() {
     const amount = Number(amountText);
 
     if (!Number.isFinite(amount) || amount <= 0) {
-      Alert.alert("Invalid amount", "Enter a valid payment amount.");
+      showAppAlert("Invalid amount", "Enter a valid payment amount.", "error");
       return;
     }
 
     if (amount > selected.balance + 0.009) {
-      Alert.alert(
+      showAppAlert(
         "Amount exceeds balance",
-        `The remaining balance is ${money(selected.balance)}.`
+        `The remaining balance is ${money(selected.balance)}.`,
+        "warning"
       );
       return;
     }
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate)) {
-      Alert.alert("Invalid payment date", "Use YYYY-MM-DD.");
+      showAppAlert("Invalid payment date", "Use YYYY-MM-DD.", "error");
       return;
     }
 
@@ -727,9 +955,10 @@ export default function FeesScreen() {
       await loadFees();
     } catch (error: any) {
       console.error("Fee payment error:", error);
-      Alert.alert(
+      showAppAlert(
         "Payment not saved",
-        error?.message || "Unable to record payment."
+        error?.message || "Unable to record payment.",
+        "error"
       );
     } finally {
       setSaving(false);
@@ -740,7 +969,7 @@ export default function FeesScreen() {
     const phone = (student.phone || "").replace(/[^\d]/g, "");
 
     if (!phone) {
-      Alert.alert("Phone number missing", "Add the student's WhatsApp number first.");
+      showAppAlert("Phone number missing", "Add the student's WhatsApp number first.", "warning");
       return;
     }
 
@@ -754,7 +983,7 @@ export default function FeesScreen() {
     try {
       await Linking.openURL(url);
     } catch {
-      Alert.alert("WhatsApp unavailable", "Install WhatsApp or check the phone number.");
+      showAppAlert("WhatsApp unavailable", "Install WhatsApp or check the phone number.", "error");
     }
   };
 
@@ -796,57 +1025,34 @@ export default function FeesScreen() {
   const shareReceipt = async () => {
     if (!lastReceipt) return;
 
-    const rawPhone = (lastReceipt.student.phone || "").replace(/[^\d]/g, "");
+    const rawPhone = (lastReceipt.student.phone || "").replace(/[^\\d]/g, "");
     if (!rawPhone) {
-      Alert.alert(
+      showAppAlert(
         "Phone number missing",
-        "Add the student's WhatsApp number before sharing the receipt."
+        "Add the student's WhatsApp number before sharing the receipt.",
+        "warning"
       );
       return;
     }
 
-    // Indian mobile numbers are commonly stored as 10 digits.
+    // WhatsApp text sharing works without the react-native-share native module.
+    // Expo Go can open WhatsApp using this URL, but cannot attach a captured image
+    // through the standard React Native Share API.
     const internationalPhone = rawPhone.length === 10 ? `91${rawPhone}` : rawPhone;
+    const message = encodeURIComponent(buildReceiptMessage());
+    const whatsappUrl = `https://wa.me/${internationalPhone}?text=${message}`;
 
     try {
-      // Capture the rendered receipt view as a PNG file.
-      const capturedUri = await receiptViewRef.current?.capture();
-      if (!capturedUri) {
-        throw new Error("Could not generate the receipt image. Please try again.");
+      const canOpen = await Linking.canOpenURL(whatsappUrl);
+      if (!canOpen) {
+        throw new Error("Unable to open WhatsApp. Please check that it is installed.");
       }
-
-      // Ensure the native share module receives a local file URI.
-      const imageUri =
-        capturedUri.startsWith("file://") || capturedUri.startsWith("content://")
-          ? capturedUri
-          : `file://${capturedUri}`;
-
-      // Opens WhatsApp targeted to the student's number and attaches the PNG.
-      // This requires a custom Expo development/production build; Expo Go does
-      // not include the react-native-share native module.
-      await RNShare.shareSingle({
-        social: RNShare.Social.WHATSAPP,
-        whatsAppNumber: internationalPhone,
-        url: imageUri,
-        type: "image/png",
-        filename: "gyandeep-fee-receipt.png",
-        message: buildReceiptMessage(),
-        failOnCancel: false,
-      });
+      await Linking.openURL(whatsappUrl);
     } catch (error: any) {
-      const message = String(error?.message || "");
-      if (
-        message.toLowerCase().includes("cancel") ||
-        message.toLowerCase().includes("dismiss")
-      ) {
-        return;
-      }
-
-      console.error("WhatsApp receipt image share failed:", error);
-      Alert.alert(
-        "Unable to share receipt image",
-        message ||
-          "WhatsApp could not open with the receipt. Confirm WhatsApp is installed and use a custom Expo build that includes react-native-share."
+      showAppAlert(
+        "Unable to open WhatsApp",
+        error?.message || "Please install WhatsApp or use the Share Text option.",
+        "error"
       );
     }
   };
@@ -856,7 +1062,7 @@ export default function FeesScreen() {
     try {
       await Share.share({ message: buildReceiptMessage() });
     } catch (error: any) {
-      Alert.alert("Unable to share", error?.message || "Try again.");
+      showAppAlert("Unable to share", error?.message || "Try again.", "error");
     }
   };
 
@@ -999,9 +1205,33 @@ export default function FeesScreen() {
             {formatDate(item.billing_period_end)}
           </Text>
         </View>
-        <Text style={styles.historyAmount}>
-          +{money(Number(item.amount_paid))}
-        </Text>
+        <View style={styles.historyRight}>
+  <Text style={styles.historyAmount}>
+    +{money(Number(item.amount_paid))}
+  </Text>
+
+  {canCollect && (
+    <View style={styles.transactionActions}>
+      <TouchableOpacity
+        style={styles.transactionEditButton}
+        onPress={() => openEditTransaction(item)}
+        disabled={saving}
+      >
+        <Feather name="edit-2" size={13} color={NAVY} />
+        <Text style={styles.transactionEditText}>Edit</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.transactionDeleteButton}
+        onPress={() => deleteTransaction(item)}
+        disabled={saving}
+      >
+        <Feather name="trash-2" size={13} color={RED} />
+        <Text style={styles.transactionDeleteText}>Delete</Text>
+      </TouchableOpacity>
+    </View>
+  )}
+</View>
       </View>
     );
   };
@@ -1270,7 +1500,7 @@ export default function FeesScreen() {
                   onPress={() => {
                     const row = studentPeriods.find((r) => r.balance > 0);
                     if (row) openPayment(row);
-                    else Alert.alert("No outstanding fees", "This student has no balance to collect.");
+                    else showAppAlert("No outstanding fees", "This student has no balance to collect.", "info");
                   }}
                 >
                   <Feather name="check-circle" size={16} color={WHITE} />
@@ -1487,6 +1717,139 @@ export default function FeesScreen() {
           </KeyboardAvoidingView>
         </View>
       </Modal>
+
+
+      {/* Edit transaction */}
+<Modal
+  visible={showEditTransaction}
+  transparent
+  animationType="slide"
+  onRequestClose={() => !saving && setShowEditTransaction(false)}
+>
+  <View style={styles.modalBackdrop}>
+    <TouchableOpacity
+      style={styles.backdropTouch}
+      activeOpacity={1}
+      onPress={() => !saving && setShowEditTransaction(false)}
+    />
+
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      style={styles.sheetKeyboard}
+    >
+      <View style={styles.sheetCard}>
+        <View style={styles.sheetHandle} />
+
+        <View style={styles.modalHeader}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.modalTitle}>Edit transaction</Text>
+            <Text style={styles.modalSubtitle}>
+              Receipt: {editingPayment?.receipt_number || "—"}
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.modalClose}
+            onPress={() => setShowEditTransaction(false)}
+            disabled={saving}
+          >
+            <Feather name="x" size={20} color={NAVY} />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView keyboardShouldPersistTaps="handled">
+          <Text style={styles.inputLabel}>Payment amount (₹)</Text>
+          <TextInput
+            value={transactionAmount}
+            onChangeText={setTransactionAmount}
+            keyboardType="decimal-pad"
+            style={styles.amountInput}
+            placeholder="Enter amount"
+            placeholderTextColor={MUTED}
+            editable={!saving}
+          />
+
+          <Text style={styles.inputLabel}>Payment date (YYYY-MM-DD)</Text>
+          <TextInput
+            value={transactionDate}
+            onChangeText={setTransactionDate}
+            style={styles.amountInput}
+            placeholder="YYYY-MM-DD"
+            placeholderTextColor={MUTED}
+            editable={!saving}
+          />
+
+          <Text style={styles.inputLabel}>Payment method</Text>
+          <View style={styles.methodRow}>
+            {[
+              { label: "Cash", value: "cash", icon: "credit-card" as IconName },
+              { label: "UPI", value: "upi", icon: "smartphone" as IconName },
+              {
+                label: "Bank",
+                value: "bank_transfer",
+                icon: "briefcase" as IconName,
+              },
+            ].map((option) => (
+              <TouchableOpacity
+                key={option.value}
+                style={[
+                  styles.methodButton,
+                  transactionMethod === option.value &&
+                    styles.methodButtonActive,
+                ]}
+                onPress={() => setTransactionMethod(option.value)}
+                disabled={saving}
+              >
+                <Feather
+                  name={option.icon}
+                  size={16}
+                  color={transactionMethod === option.value ? GOLD : NAVY}
+                />
+                <Text
+                  style={[
+                    styles.methodText,
+                    transactionMethod === option.value &&
+                      styles.methodTextActive,
+                  ]}
+                >
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={styles.inputLabel}>Note (optional)</Text>
+          <TextInput
+            value={transactionNotes}
+            onChangeText={setTransactionNotes}
+            style={[styles.amountInput, styles.notesInput]}
+            placeholder="Transaction reference or remarks"
+            placeholderTextColor={MUTED}
+            multiline
+            editable={!saving}
+          />
+
+          <TouchableOpacity
+            style={[styles.submitButton, saving && { opacity: 0.6 }]}
+            onPress={saveTransactionEdit}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator color={WHITE} />
+            ) : (
+              <>
+                <Feather name="save" size={18} color={GOLD} />
+                <Text style={styles.submitButtonText}>
+                  Save transaction
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+    </KeyboardAvoidingView>
+  </View>
+</Modal>
 
       {/* Fee editing */}
       <Modal
@@ -1732,7 +2095,7 @@ export default function FeesScreen() {
                 onPress={shareReceipt}
               >
                 <Feather name="message-circle" size={16} color={WHITE} />
-                <Text style={styles.primaryActionText}>Share receipt image</Text>
+                <Text style={styles.primaryActionText}>Share receipt on WhatsApp</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.secondaryAction}
@@ -1744,7 +2107,7 @@ export default function FeesScreen() {
             </View>
 
             <Text style={styles.noticeText}>
-              Share receipt image opens WhatsApp for the student's saved number and attaches the generated PNG. Requires a custom Expo build with react-native-share; it will not work in Expo Go.
+              Opens WhatsApp with the receipt details as a pre-filled message. Image attachment is not supported by this Expo Go-compatible option.
             </Text>
 
             <TouchableOpacity
@@ -1756,6 +2119,17 @@ export default function FeesScreen() {
           </View>
         </View>
       </Modal>
+
+      <AppAlert
+        visible={appAlert.visible}
+        title={appAlert.title}
+        message={appAlert.message}
+        type={appAlert.type}
+        confirmLabel={appAlert.confirmLabel}
+        cancelLabel={appAlert.cancelLabel}
+        onConfirm={appAlert.onConfirm}
+        onCancel={closeAppAlert}
+      />
     </View>
   );
 }
@@ -2030,8 +2404,39 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  historyInfo: { flex: 1 },
+  historyInfo: { flex: 1, minWidth: 0 },
+  historyRight: {
+    alignItems: "flex-end",
+    gap: 10,
+    maxWidth: 130,
+  },
   historyAmount: { color: GREEN, fontSize: 13, fontWeight: "800" },
+  transactionActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+    gap: 6,
+  },
+  transactionEditButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: "#EEF3FC",
+  },
+  transactionEditText: { color: NAVY, fontSize: 10, fontWeight: "800" },
+  transactionDeleteButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: "#FFF0F0",
+  },
+  transactionDeleteText: { color: RED, fontSize: 10, fontWeight: "800" },
   receiptText: { color: NAVY, fontSize: 10, marginTop: 5, fontWeight: "700" },
 
   loadingBox: { alignItems: "center", paddingVertical: 45 },

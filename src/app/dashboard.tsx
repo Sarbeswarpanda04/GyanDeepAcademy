@@ -169,7 +169,14 @@ export default function DashboardScreen() {
       route: "/expenses",
       color: "#F8F3ED",
       iconColor: "#B8761E",
-    }
+    },
+    {
+      title: "Staff Salary",
+      icon: "credit-card",
+      route: "/staff-salary",
+      color: "#F8F3ED",
+      iconColor: "#1e8ab8",
+    },
   ];
 
   const refreshDashboard = useCallback(() => {
