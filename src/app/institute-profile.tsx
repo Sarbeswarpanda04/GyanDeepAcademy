@@ -957,7 +957,7 @@ const styles = StyleSheet.create({
   saveText: { color: "#FFFFFF", fontSize: 20 },
   modalRoot: { flex: 1, justifyContent: "flex-end" },
   scrim: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(0,0,0,0.35)",
   },
   sheetKeyboard: { maxHeight: "90%", justifyContent: "flex-end" },

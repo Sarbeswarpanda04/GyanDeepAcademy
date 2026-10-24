@@ -82,7 +82,9 @@ export default function BirthdaysScreen() {
   const [instituteName, setInstituteName] = useState("GyanDeep Academy");
   const [loading, setLoading] = useState(true);
   const [sharingId, setSharingId] = useState<string | null>(null);
-  const imageRefs = useRef<Record<string, ViewShot | null>>({});
+  const imageRefs = useRef<
+    Record<string, React.ElementRef<typeof ViewShot> | null>
+  >({});
 
   const loadBirthdays = useCallback(async () => {
     setLoading(true);

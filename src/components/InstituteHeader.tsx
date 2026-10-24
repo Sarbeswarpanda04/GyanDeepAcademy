@@ -1,4 +1,3 @@
-
 import React, { useCallback, useState } from "react";
 import {
   Image,
@@ -9,14 +8,16 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, router } from "expo-router";
+
 import { supabase } from "../lib/supabase";
 
-const NAVY = "#202F42";
-const NAVY_LIGHT = "#35485F";
-const GOLD = "#E9BD59";
-const MUTED = "#C0CCD8";
+const PURPLE_DARK = "#6D28D9";
+const PURPLE = "#8B5CF6";
+const PURPLE_LIGHT = "#C4B5FD";
 const WHITE = "#FFFFFF";
+const MUTED = "#F3EFFF";
 
 type InstituteBrand = {
   name: string;
@@ -71,7 +72,7 @@ export default function InstituteHeader({
 
       let logoUrl: string | null = data.logo_url ?? null;
 
-      // Resolve private Storage paths into signed URLs.
+      // Support both public URLs and private Storage object paths.
       if (logoUrl && !/^https?:\/\//i.test(logoUrl)) {
         const { data: signedData, error: signedError } =
           await supabase.storage
@@ -108,34 +109,51 @@ export default function InstituteHeader({
   };
 
   return (
-    <View style={styles.wrapper}>
+    <LinearGradient
+      colors={["#611cd0", "#44109d", "#4c02f7"]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.wrapper}
+    >
       <StatusBar
         barStyle="light-content"
-        backgroundColor={NAVY}
+        backgroundColor={PURPLE_DARK}
         translucent={false}
       />
 
       <View style={styles.container}>
         {/* Institute logo */}
-        <View style={styles.logoFrame}>
-          {brand.logo_url ? (
-            <Image
-              key={brand.logo_url}
-              source={{ uri: brand.logo_url }}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-          ) : (
-            <View style={styles.fallbackLogo}>
-              <Text style={styles.fallbackText}>GD</Text>
-              <View style={styles.logoAccent} />
-              <Text style={styles.logoCaption}>ACADEMY</Text>
-            </View>
-          )}
+        <View style={styles.logoOuter}>
+          <View style={styles.logoFrame}>
+            {brand.logo_url ? (
+              <Image
+                key={brand.logo_url}
+                source={{ uri: brand.logo_url }}
+                style={styles.logo}
+                resizeMode="contain"
+              />
+            ) : (
+              <LinearGradient
+                colors={["#FFFFFF", "#F3EFFF"]}
+                style={styles.fallbackLogo}
+              >
+                <Text style={styles.fallbackText}>GD</Text>
+                <View style={styles.logoAccent} />
+                <Text style={styles.logoCaption}>ACADEMY</Text>
+              </LinearGradient>
+            )}
+          </View>
         </View>
 
-        {/* Institute name and subtitle */}
+        {/* Institute details */}
         <View style={styles.textContainer}>
+          <Text
+            style={styles.eyebrow}
+            numberOfLines={1}
+          >
+            INSTITUTE PORTAL
+          </Text>
+
           <Text
             style={styles.instituteName}
             numberOfLines={2}
@@ -153,7 +171,7 @@ export default function InstituteHeader({
           </View>
         </View>
 
-        {/* Support button */}
+        {/* Support action */}
         {showSupport && (
           <TouchableOpacity
             style={styles.supportButton}
@@ -170,35 +188,41 @@ export default function InstituteHeader({
           </TouchableOpacity>
         )}
       </View>
-    </View>
+
+      <View style={styles.bottomHighlight} />
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   wrapper: {
-    backgroundColor: NAVY,
+    overflow: "hidden",
   },
 
   container: {
     width: "100%",
-    minHeight: 100,
-    backgroundColor: NAVY,
+    minHeight: 112,
     paddingHorizontal: 18,
-    paddingTop: 35,
-    paddingBottom: 10,
+    paddingTop: 36,
+    paddingBottom: 15,
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 13,
+  },
+
+  logoOuter: {
+    width: 60,
+    height: 60,
+    borderRadius: 19,
+    padding: 2,
+    backgroundColor: "rgba(255,255,255,0.48)",
+    flexShrink: 0,
   },
 
   logoFrame: {
-    width: 54,
-    height: 54,
-    flexShrink: 0,
-    borderRadius: 15,
+    flex: 1,
+    borderRadius: 17,
     backgroundColor: WHITE,
-    borderWidth: 1,
-    borderColor: "#E5D8B7",
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
@@ -210,32 +234,34 @@ const styles = StyleSheet.create({
   },
 
   fallbackLogo: {
+    width: "100%",
+    height: "100%",
     alignItems: "center",
     justifyContent: "center",
   },
 
   fallbackText: {
-    color: NAVY,
-    fontSize: 23,
-    lineHeight: 26,
+    color: PURPLE_DARK,
+    fontSize: 24,
+    lineHeight: 27,
     fontWeight: "900",
-    letterSpacing: -1,
+    letterSpacing: -1.2,
   },
 
   logoAccent: {
-    width: 24,
-    height: 2,
-    backgroundColor: GOLD,
+    width: 25,
+    height: 3,
     borderRadius: 2,
+    backgroundColor: PURPLE,
     marginTop: 1,
   },
 
   logoCaption: {
-    color: "#947326",
+    color: PURPLE_DARK,
     fontSize: 6,
     fontWeight: "900",
-    letterSpacing: 1.2,
-    marginTop: 2,
+    letterSpacing: 1.1,
+    marginTop: 3,
   },
 
   textContainer: {
@@ -244,10 +270,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
+  eyebrow: {
+    color: PURPLE_LIGHT,
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1.7,
+    marginBottom: 3,
+  },
+
   instituteName: {
     color: WHITE,
-    fontSize: 17,
-    lineHeight: 22,
+    fontSize: 18,
+    lineHeight: 23,
     fontWeight: "800",
     letterSpacing: 0.1,
   },
@@ -256,14 +290,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginTop: 5,
-    gap: 6,
+    gap: 7,
   },
 
   statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: GOLD,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: "#D9F99D",
   },
 
   subtitle: {
@@ -275,14 +309,19 @@ const styles = StyleSheet.create({
   },
 
   supportButton: {
-    width: 42,
-    height: 42,
+    width: 43,
+    height: 43,
     flexShrink: 0,
-    borderRadius: 14,
-    backgroundColor: NAVY_LIGHT,
+    borderRadius: 15,
+    backgroundColor: "rgba(255,255,255,0.14)",
     borderWidth: 1,
-    borderColor: "#46576B",
+    borderColor: "rgba(255,255,255,0.3)",
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  bottomHighlight: {
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.24)",
   },
 });

@@ -20,6 +20,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { decode } from "base64-arraybuffer";
 import { router, useLocalSearchParams } from "expo-router";
 import { supabase } from "../lib/supabase";
+import { LinearGradient } from "expo-linear-gradient";
 
 type ClassRow = {
   id: string;
@@ -52,10 +53,17 @@ type Stage =
   | "removing subjects"
   | "removing batches";
 
-const NAVY = "#202F41";
-const BLUE = "#3988E8";
-const BG = "#F1F6FA";
-const BORDER = "#DDE5EC";
+const PURPLE_DARK = "#44109D";
+const PURPLE = "#611CD0";
+const PURPLE_BRIGHT = "#4C02F7";
+const LAVENDER = "#C4B5FD";
+const BG = "#F3F3FF";
+const WHITE = "#FFFFFF";
+const TEXT = "#1F2937";
+const MUTED = "#718096";
+const BORDER = "#E8E3F5";
+const NAVY = PURPLE_DARK;
+const BLUE = PURPLE;
 
 const FREQUENCIES: { label: string; value: Frequency }[] = [
   { label: "Monthly", value: "monthly" },
@@ -146,6 +154,14 @@ export default function AddStudentsScreen() {
     | null
   >(null);
   const [calendarMonth, setCalendarMonth] = useState(new Date());
+const [showYearPicker, setShowYearPicker] = useState(false);
+
+const currentYear = new Date().getFullYear();
+
+const yearOptions = Array.from(
+  { length: currentYear - 1899 },
+  (_, index) => currentYear - index,
+);
 
   const [notice, setNotice] = useState<{
     title: string;
@@ -253,7 +269,9 @@ export default function AddStudentsScreen() {
 
           if (studentError) throw studentError;
           if (!existingStudent) {
-            throw new Error("The student could not be found in this institute.");
+            throw new Error(
+              "The student could not be found in this institute.",
+            );
           }
 
           const [
@@ -292,15 +310,14 @@ export default function AddStudentsScreen() {
             const { data: existingClass, error: existingClassError } =
               await supabase
                 .from("institute_classes")
-                .select(
-                  "id,name,default_fee_amount,default_fee_frequency",
-                )
+                .select("id,name,default_fee_amount,default_fee_frequency")
                 .eq("id", existingStudent.class_id)
                 .eq("institute_id", id)
                 .maybeSingle();
 
             if (existingClassError) throw existingClassError;
-            if (existingClass) loadedClasses = [...loadedClasses, existingClass];
+            if (existingClass)
+              loadedClasses = [...loadedClasses, existingClass];
           }
 
           const missingBatchIds = batchIds.filter(
@@ -543,7 +560,7 @@ export default function AddStudentsScreen() {
     setSaving(true);
 
     let stage: Stage = "checking authentication";
-    let studentId: string | null = isEditMode ? editStudentId ?? null : null;
+    let studentId: string | null = isEditMode ? (editStudentId ?? null) : null;
     let studentCreated = false;
 
     try {
@@ -582,10 +599,7 @@ export default function AddStudentsScreen() {
         .maybeSingle();
 
       if (classError) throw classError;
-      if (
-        !classRow ||
-        (!classRow.is_active && classId !== originalClassId)
-      ) {
+      if (!classRow || (!classRow.is_active && classId !== originalClassId)) {
         throw new Error("The selected class is invalid or inactive.");
       }
 
@@ -906,11 +920,16 @@ export default function AddStudentsScreen() {
     </View>
   );
 
-  const openDate = (kind: "admission" | "dob") => {
-    const selected = kind === "admission" ? admission : dob;
-    setCalendarMonth(new Date(`${selected || todayISO()}T12:00:00`));
-    setPicker(kind);
-  };
+const openDate = (kind: "admission" | "dob") => {
+  const selected = kind === "admission" ? admission : dob;
+
+  setCalendarMonth(
+    new Date(`${selected || todayISO()}T12:00:00`),
+  );
+
+  setShowYearPicker(false);
+  setPicker(kind);
+};
 
   const daysInMonth = new Date(
     calendarMonth.getFullYear(),
@@ -966,34 +985,48 @@ export default function AddStudentsScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar barStyle="light-content" backgroundColor="#44109D" />
 
-      <View style={styles.header}>
+      <LinearGradient
+        colors={["#611CD0", "#44109D", "#4C02F7"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
+      >
         <Pressable
+          style={styles.headerBack}
           onPress={() => (step === 2 ? setStep(1) : router.back())}
+          accessibilityRole="button"
           accessibilityLabel="Go back"
+          hitSlop={8}
         >
-          <Feather name="chevron-left" size={28} color={NAVY} />
+          <Feather name="chevron-left" size={27} color="#FFFFFF" />
         </Pressable>
 
-        <Text style={styles.headerTitle}>
-          {isEditMode ? "Edit Student" : "Add Student"}
-        </Text>
+        <View style={styles.headerTextWrap}>
+          <Text style={styles.headerTitle}>
+            {isEditMode ? "Edit Student" : "Add Student"}
+          </Text>
+          <Text style={styles.headerSubtitle}>
+            {step === 1 ? "Student information" : "Fee configuration"}
+          </Text>
+        </View>
 
         <Pressable
-          style={styles.help}
+          style={styles.headerHelp}
           onPress={() =>
             showError(
               "Help",
               isEditMode
                 ? "Update the student details, class, batches, and fee, then save your changes."
-                : "Complete the Basic details, select a class and batch, then configure the fee and save.",
+                : "Complete the student details, select a class and batch, then configure the fee and save.",
             )
           }
+          accessibilityRole="button"
         >
-          <Text style={styles.helpText}>Help?</Text>
+          <Feather name="help-circle" size={19} color="#FFFFFF" />
         </Pressable>
-      </View>
+      </LinearGradient>
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -1522,19 +1555,47 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    padding: 17,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5EAF0",
+    paddingHorizontal: 18,
+    paddingTop: 30,
+    paddingBottom: 20,
+    gap: 12,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
-  headerTitle: { flex: 1, fontSize: 23, fontWeight: "800", color: NAVY },
-  help: {
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 20,
-    paddingHorizontal: 13,
-    paddingVertical: 6,
+
+  headerBack: {
+    width: 44,
+    height: 44,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.15)",
+  },
+
+  headerTextWrap: {
+    flex: 1,
+    gap: 4,
+  },
+
+  headerTitle: {
+    color: "#FFFFFF",
+    fontSize: 22,
+    fontWeight: "800",
+  },
+
+  headerSubtitle: {
+    color: "#E9DDFF",
+    fontSize: 12,
+    fontWeight: "500",
+  },
+
+  headerHelp: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.15)",
   },
   helpText: { color: "#6382A2", fontWeight: "700" },
 
@@ -1596,42 +1657,57 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   input: {
-    minHeight: 58,
-    borderWidth: 1.3,
-    borderColor: "#DADFE4",
-    borderRadius: 12,
+    minHeight: 54,
+    borderWidth: 1,
+    borderColor: "#E8E3F5",
+    borderRadius: 15,
     backgroundColor: "#FFFFFF",
-    paddingHorizontal: 15,
-    color: "#243345",
+    paddingHorizontal: 16,
+    color: "#1F2937",
     fontSize: 15,
   },
   addressInput: { height: 84, textAlignVertical: "top", paddingTop: 14 },
   rollWrap: {
-    minHeight: 58,
+    minHeight: 54,
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1.3,
-    borderColor: "#C9D4DE",
-    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E8E3F5",
+    borderRadius: 15,
     backgroundColor: "#FFFFFF",
-    paddingHorizontal: 15,
+    paddingHorizontal: 16,
   },
-  prefix: { color: NAVY, fontWeight: "800", fontSize: 16, marginRight: 8 },
-  rollInput: { flex: 1, minHeight: 55, color: "#243345", fontSize: 15 },
+  prefix: {
+    color: "#611CD0",
+    fontWeight: "800",
+    fontSize: 16,
+    marginRight: 10,
+  },
+
+  rollInput: {
+    flex: 1,
+    minHeight: 52,
+    color: "#1F2937",
+    fontSize: 15,
+  },
 
   select: {
-    minHeight: 58,
+    minHeight: 54,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderWidth: 1.3,
-    borderColor: "#DADFE4",
-    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E8E3F5",
+    borderRadius: 15,
     backgroundColor: "#FFFFFF",
-    paddingHorizontal: 15,
+    paddingHorizontal: 16,
     marginBottom: 18,
   },
-  selectText: { color: "#243345", fontSize: 15, flex: 1 },
+  selectText: {
+    color: "#1F2937",
+    fontSize: 15,
+    flex: 1,
+  },
   genderRow: {
     flexDirection: "row",
     backgroundColor: "#EAF0F6",
@@ -1732,7 +1808,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     backgroundColor: "rgba(17,35,52,0.38)",
   },
-  shade: { ...StyleSheet.absoluteFillObject },
+  shade: { ...StyleSheet.absoluteFill },
   sheet: {
     maxHeight: "82%",
     backgroundColor: "#FFFFFF",

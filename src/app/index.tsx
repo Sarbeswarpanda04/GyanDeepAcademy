@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -19,11 +18,9 @@ import { supabase } from "../lib/supabase";
 
 const NAVY = "#123263";
 const BLUE = "#2878E5";
-const GOLD = "#D9AC52";
 const BACKGROUND = "#EDF5FF";
 const CARD = "#FFFFFF";
 
-// Local fallback logo. Make sure this file exists.
 const APP_LOGO: ImageSourcePropType = require("../../assets/images/icon.png");
 
 const roles = [
@@ -80,16 +77,38 @@ export default function Index() {
     async function restoreSession() {
       try {
         const { data, error } = await supabase.auth.getSession();
+
         if (error) throw error;
 
         const session = data.session;
 
-        if (!session) {
+        // No authenticated session: display the role-selection screen.
+        if (!session?.user) {
           if (!cancelled) setCheckingSession(false);
           return;
         }
 
-        const { data: membership, error: membershipError } =
+        // 1. Check active teacher membership first.
+        const { data: teacherMembership, error: teacherError } =
+          await supabase
+            .from("institute_team_members")
+            .select("id")
+            .eq("user_id", session.user.id)
+            .eq("role", "teacher")
+            .eq("is_active", true)
+            .limit(1)
+            .maybeSingle();
+
+        if (teacherError) throw teacherError;
+        if (cancelled) return;
+
+        if (teacherMembership) {
+          router.replace("/teacher/teacher-dashboard" as never);
+          return;
+        }
+
+        // 2. Check coaching-owner membership.
+        const { data: ownerMembership, error: ownerError } =
           await supabase
             .from("institute_members")
             .select("institute_id")
@@ -98,22 +117,26 @@ export default function Index() {
             .limit(1)
             .maybeSingle();
 
-        if (membershipError) throw membershipError;
+        if (ownerError) throw ownerError;
+        if (cancelled) return;
 
-        if (membership?.institute_id) {
+        // 3. Restore institute branding for an owner who has an institute.
+        if (ownerMembership?.institute_id) {
           const { data: instituteData, error: instituteError } =
             await supabase
               .from("institutes")
               .select("name, logo_url")
-              .eq("id", membership.institute_id)
+              .eq("id", ownerMembership.institute_id)
               .maybeSingle();
 
           if (instituteError) throw instituteError;
+          if (cancelled) return;
 
-          if (instituteData && !cancelled) {
-            let logoUrl: string | null =
-              instituteData.logo_url || null;
+          if (instituteData) {
+            let logoUrl: string | null = instituteData.logo_url || null;
 
+            // If logo_url is a storage path rather than a URL,
+            // create a signed URL for the institute-assets bucket.
             if (logoUrl && !/^https?:\/\//i.test(logoUrl)) {
               const { data: signedData, error: storageError } =
                 await supabase.storage
@@ -121,36 +144,53 @@ export default function Index() {
                   .createSignedUrl(logoUrl, 3600);
 
               if (storageError) {
-                console.warn("Unable to load institute logo:", storageError.message);
+                console.warn(
+                  "Unable to load institute logo:",
+                  storageError.message,
+                );
                 logoUrl = null;
               } else {
                 logoUrl = signedData?.signedUrl ?? null;
               }
             }
 
-            if (!cancelled) {
-              setInstitute({
-                name: instituteData.name || "GyanDeep Academy",
-                logoUrl,
-              });
-            }
+            if (cancelled) return;
+
+            setInstitute({
+              name: instituteData.name || "GyanDeep Academy",
+              logoUrl,
+            });
           }
+
+          if (cancelled) return;
+
+          router.replace("/dashboard" as never);
+          return;
         }
 
-        if (cancelled) return;
-
-        router.replace(
-          membership?.institute_id ? "/dashboard" : "/institute-setup"
-        );
+        /*
+         * Do not assume every authenticated user is an owner.
+         * Manager/student dashboard routes are intentionally not guessed
+         * here because their exact route paths have not been established.
+         *
+         * Leave those sessions on the role-selection screen rather than
+         * incorrectly redirecting them to institute setup.
+         */
+        if (!cancelled) {
+          setCheckingSession(false);
+        }
       } catch (error: unknown) {
         if (cancelled) return;
+
+        console.error("[role-selection] Session restore failed:", error);
 
         Alert.alert(
           "Unable to restore your session",
           error instanceof Error
             ? error.message
-            : "Please try signing in again."
+            : "Please try again.",
         );
+
         setCheckingSession(false);
       }
     }
@@ -166,26 +206,38 @@ export default function Index() {
     if (!selectedRole) return;
 
     if (selectedRole === "teacher") {
-      router.push("/teacher/teacher-login");
+      router.push("/teacher/teacher-login" as never);
       return;
     }
 
     router.push({
       pathname: "/login",
       params: { role: selectedRole },
-    });
+    } as never);
   }
 
   if (checkingSession) {
     return (
       <SafeAreaView style={styles.loadingScreen}>
-        <StatusBar barStyle="dark-content" backgroundColor={BACKGROUND} />
+        <StatusBar
+          barStyle="dark-content"
+          backgroundColor={BACKGROUND}
+        />
+
         <View style={styles.loadingContent}>
           <View style={styles.loadingLogo}>
-            <Image source={APP_LOGO} style={styles.loadingLogoImage} />
+            <Image
+              source={APP_LOGO}
+              style={styles.loadingLogoImage}
+              resizeMode="contain"
+            />
           </View>
+
           <ActivityIndicator size="large" color={BLUE} />
-          <Text style={styles.loadingText}>Preparing your experience...</Text>
+
+          <Text style={styles.loadingText}>
+            Preparing your experience...
+          </Text>
         </View>
       </SafeAreaView>
     );
@@ -196,7 +248,10 @@ export default function Index() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor={BACKGROUND} />
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor={BACKGROUND}
+      />
 
       <ScrollView
         contentContainerStyle={styles.container}
@@ -222,8 +277,13 @@ export default function Index() {
           </View>
 
           <Text style={styles.brandName}>{displayName}</Text>
+
           <View style={styles.locationRow}>
-            <Ionicons name="location-outline" size={12} color="#7285A3" />
+            <Ionicons
+              name="location-outline"
+              size={12}
+              color="#7285A3"
+            />
             <Text style={styles.location}>KHORDHA, ODISHA</Text>
           </View>
         </View>
@@ -231,23 +291,32 @@ export default function Index() {
         {/* Heading */}
         <View style={styles.heading}>
           <View style={styles.eyebrowPill}>
-            <Ionicons name="sparkles-outline" size={13} color={BLUE} />
-            <Text style={styles.eyebrow}>YOUR LEARNING COMMUNITY</Text>
+            <Ionicons
+              name="sparkles-outline"
+              size={13}
+              color={BLUE}
+            />
+            <Text style={styles.eyebrow}>
+              YOUR LEARNING COMMUNITY
+            </Text>
           </View>
 
           <Text style={styles.title}>
             How will you use{"\n"}
-            <Text style={styles.titleAccent}>GyanDeep Academy?</Text>
+            <Text style={styles.titleAccent}>
+              GyanDeep Academy?
+            </Text>
           </Text>
 
           <Text style={styles.description}>
-            Select your role to access the tools and features designed for you.
+            Select your role to access the tools and features designed
+            for you.
           </Text>
         </View>
 
         {/* Role selection */}
         <View style={styles.roleList}>
-          {roles.map((role, index) => {
+          {roles.map((role) => {
             const active = selectedRole === role.id;
 
             return (
@@ -278,7 +347,9 @@ export default function Index() {
 
                 <View style={styles.roleText}>
                   <Text style={styles.roleTitle}>{role.title}</Text>
-                  <Text style={styles.roleSubtitle}>{role.subtitle}</Text>
+                  <Text style={styles.roleSubtitle}>
+                    {role.subtitle}
+                  </Text>
                 </View>
 
                 <View
@@ -306,12 +377,18 @@ export default function Index() {
           ]}
         >
           <Text style={styles.buttonText}>Continue</Text>
-          <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+          <Ionicons
+            name="arrow-forward"
+            size={20}
+            color="#FFFFFF"
+          />
         </Pressable>
 
         <View style={styles.footer}>
           <View style={styles.footerLine} />
-          <Text style={styles.footerText}>LEARN TODAY, LEAD TOMORROW</Text>
+          <Text style={styles.footerText}>
+            LEARN TODAY, LEAD TOMORROW
+          </Text>
           <View style={styles.footerLine} />
         </View>
       </ScrollView>
@@ -499,7 +576,7 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 11,
     borderWidth: 1.5,
-    borderColor: "#C7D4E7",
+    borderColor: "#C7D5E8",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -513,28 +590,28 @@ const styles = StyleSheet.create({
     backgroundColor: BLUE,
   },
   button: {
-    height: 55,
+    minHeight: 56,
+    backgroundColor: BLUE,
     borderRadius: 17,
-    backgroundColor: NAVY,
-    marginTop: 23,
-    paddingHorizontal: 20,
+    marginTop: 24,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    shadowColor: NAVY,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.17,
+    shadowColor: BLUE,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.2,
     shadowRadius: 10,
     elevation: 4,
   },
   buttonDisabled: {
-    opacity: 0.42,
+    backgroundColor: "#A8C5ED",
     shadowOpacity: 0,
     elevation: 0,
   },
   buttonPressed: {
-    opacity: 0.86,
+    opacity: 0.88,
+    transform: [{ scale: 0.99 }],
   },
   buttonText: {
     color: "#FFFFFF",
@@ -545,18 +622,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 9,
-    marginTop: 25,
+    gap: 10,
+    marginTop: 28,
   },
   footerLine: {
+    flex: 1,
     height: 1,
-    width: 20,
-    backgroundColor: "#C7D8F0",
+    backgroundColor: "#D5E2F3",
   },
   footerText: {
-    color: "#7B8EAA",
-    textAlign: "center",
-    fontSize: 8,
+    color: "#8091AA",
+    fontSize: 9,
     fontWeight: "800",
     letterSpacing: 1.1,
   },

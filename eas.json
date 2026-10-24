@@ -15,11 +15,24 @@
         "buildType": "apk"
       }
     },
-    "production": {
+    "production-apk": {
+      "distribution": "internal",
+      "developmentClient": false,
+      "android": {
+        "buildType": "apk"
+      },
       "autoIncrement": true
+    },
+    "production": {
+      "developmentClient": false,
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      }
     }
   },
   "submit": {
     "production": {}
   }
 }
+ 

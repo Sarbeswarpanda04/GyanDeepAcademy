@@ -29,7 +29,7 @@ Deno.serve(async (req: Request) => {
     return response({ success: false, message: "Method not allowed." }, 405);
   }
 
-  let admin: ReturnType<typeof createClient> | null = null;
+ let admin: ReturnType<typeof createClient<any>> | null = null;
   let createdMemberId: string | null = null;
   let createdAuthUserId: string | null = null;
 
@@ -47,7 +47,7 @@ Deno.serve(async (req: Request) => {
       return response({ success: false, message: "Please sign in first." }, 401);
     }
 
-    const callerClient = createClient(supabaseUrl, anonKey, {
+   const callerClient = createClient<any>(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authorization } },
       auth: { persistSession: false, autoRefreshToken: false },
     });
@@ -61,7 +61,7 @@ Deno.serve(async (req: Request) => {
       return response({ success: false, message: "Your session has expired." }, 401);
     }
 
-    admin = createClient(supabaseUrl, serviceRoleKey, {
+    admin = createClient<any>(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 

@@ -18,7 +18,7 @@ type Props = {
   confirmLabel?: string;
   cancelLabel?: string;
   onConfirm?: () => void;
-  onCancel: () => void;
+  onCancel?: () => void;
 };
 const themes = {
   success: {
@@ -112,8 +112,8 @@ export default function AppAlert({
       }),
     ]).start(({ finished }) => {
       if (finished) {
-        onCancel();
-        if (confirmed && onConfirm) onConfirm();
+        onCancel?.();
+        if (confirmed) onConfirm?.();
       }
       closing.current = false;
     });
@@ -172,7 +172,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 25,
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(22,48,79,.38)",
   },
   card: {

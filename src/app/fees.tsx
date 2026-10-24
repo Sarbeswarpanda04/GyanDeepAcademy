@@ -1,4 +1,3 @@
-
 import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -10,7 +9,6 @@ import {
   Platform,
   RefreshControl,
   ScrollView,
-  Share,
   StatusBar,
   StyleSheet,
   Text,
@@ -20,6 +18,8 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import ViewShot from "react-native-view-shot";
+import * as Sharing from 'expo-sharing';
+import { Share } from 'react-native';
 import { useFocusEffect } from "expo-router";
 
 import { supabase } from "../lib/supabase";
@@ -108,7 +108,7 @@ const money = (value: number) =>
 const dateOnly = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
     2,
-    "0"
+    "0",
   )}-${String(date.getDate()).padStart(2, "0")}`;
 
 const parseDate = (value: string) => {
@@ -140,15 +140,11 @@ function dueDateForMonth(year: number, month: number, day: number) {
 }
 
 function addBillingMonths(date: Date, months: number) {
-  const target = new Date(
-    date.getFullYear(),
-    date.getMonth() + months,
-    1
-  );
+  const target = new Date(date.getFullYear(), date.getMonth() + months, 1);
   return dueDateForMonth(
     target.getFullYear(),
     target.getMonth(),
-    date.getDate()
+    date.getDate(),
   );
 }
 
@@ -159,34 +155,40 @@ function addBillingMonths(date: Date, months: number) {
 function getBillingPeriods(
   fee: FeeSetting,
   student: Student,
-  now: Date
+  now: Date,
 ): BillingPeriod[] {
   const admission = parseDate(student.admission_date);
   const today = parseDate(dateOnly(now));
 
   if (fee.fee_frequency === "one_time") {
-    return [{
-      start: dateOnly(admission),
-      end: dateOnly(admission),
-      dueDate: dateOnly(admission),
-      label: "One-time fee",
-    }];
+    return [
+      {
+        start: dateOnly(admission),
+        end: dateOnly(admission),
+        dueDate: dateOnly(admission),
+        label: "One-time fee",
+      },
+    ];
   }
 
   const interval =
-    fee.fee_frequency === "monthly" ? 1 :
-    fee.fee_frequency === "quarterly" ? 3 :
-    fee.fee_frequency === "half_yearly" ? 6 : 12;
+    fee.fee_frequency === "monthly"
+      ? 1
+      : fee.fee_frequency === "quarterly"
+        ? 3
+        : fee.fee_frequency === "half_yearly"
+          ? 6
+          : 12;
 
   const billingDay = Math.min(
     31,
-    Math.max(1, fee.billing_day ?? admission.getDate())
+    Math.max(1, fee.billing_day ?? admission.getDate()),
   );
 
   let due = dueDateForMonth(
     admission.getFullYear(),
     admission.getMonth(),
-    billingDay
+    billingDay,
   );
 
   // If admission happens after that month's billing day,
@@ -212,7 +214,7 @@ function getBillingPeriods(
               year: "numeric",
             })
           : `${formatDate(dateOnly(periodStart))} – ${formatDate(
-              dateOnly(due)
+              dateOnly(due),
             )}`,
     });
 
@@ -234,7 +236,7 @@ function getBillingPeriods(
               year: "numeric",
             })
           : `${formatDate(dateOnly(periodStart))} – ${formatDate(
-              dateOnly(due)
+              dateOnly(due),
             )}`,
     });
   }
@@ -245,12 +247,11 @@ function getBillingPeriods(
 function getStatus(
   balance: number,
   dueDate: string,
-  today: string
+  today: string,
 ): FeeRow["status"] {
   if (balance <= 0.009) return "Paid";
   return dueDate > today ? "Upcoming" : "Unpaid";
 }
-
 
 export default function FeesScreen() {
   const [loading, setLoading] = useState(true);
@@ -261,52 +262,54 @@ export default function FeesScreen() {
   const [instituteId, setInstituteId] = useState("");
   const [instituteName, setInstituteName] = useState("GyanDeep Academy");
   const [instituteLogoUrl, setInstituteLogoUrl] = useState<string | null>(null);
-  const receiptViewRef = React.useRef<ViewShot>(null);
+  const receiptViewRef = React.useRef<React.ElementRef<typeof ViewShot> | null>(
+    null,
+  );
   const [canCollect, setCanCollect] = useState(false);
 
   type AppAlertType = "success" | "error" | "info" | "warning";
 
-const [appAlert, setAppAlert] = useState<{
-  visible: boolean;
-  title: string;
-  message: string;
-  type: AppAlertType;
-  confirmLabel?: string;
-  cancelLabel?: string;
-  onConfirm?: () => void;
-}>({
-  visible: false,
-  title: "",
-  message: "",
-  type: "info",
-});
-
-const showAppAlert = (
-  title: string,
-  message: string,
-  type: AppAlertType = "info",
-  options?: {
+  const [appAlert, setAppAlert] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type: AppAlertType;
     confirmLabel?: string;
     cancelLabel?: string;
     onConfirm?: () => void;
-  }
-) => {
-  setAppAlert({
-    visible: true,
-    title,
-    message,
-    type,
-    ...options,
-  });
-};
-
-const closeAppAlert = () => {
-  setAppAlert((previous) => ({
-    ...previous,
+  }>({
     visible: false,
-    onConfirm: undefined,
-  }));
-};
+    title: "",
+    message: "",
+    type: "info",
+  });
+
+  const showAppAlert = (
+    title: string,
+    message: string,
+    type: AppAlertType = "info",
+    options?: {
+      confirmLabel?: string;
+      cancelLabel?: string;
+      onConfirm?: () => void;
+    },
+  ) => {
+    setAppAlert({
+      visible: true,
+      title,
+      message,
+      type,
+      ...options,
+    });
+  };
+
+  const closeAppAlert = () => {
+    setAppAlert((previous) => ({
+      ...previous,
+      visible: false,
+      onConfirm: undefined,
+    }));
+  };
 
   const [rows, setRows] = useState<FeeRow[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -335,17 +338,17 @@ const closeAppAlert = () => {
   const [editRow, setEditRow] = useState<FeeRow | null>(null);
   const [editAmount, setEditAmount] = useState("");
   const [discountType, setDiscountType] = useState<"amount" | "percent">(
-    "amount"
+    "amount",
   );
   const [discountText, setDiscountText] = useState("0");
   const [editDueDate, setEditDueDate] = useState("");
   const [editDirty, setEditDirty] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
-const [showEditTransaction, setShowEditTransaction] = useState(false);
-const [transactionAmount, setTransactionAmount] = useState("");
-const [transactionDate, setTransactionDate] = useState("");
-const [transactionMethod, setTransactionMethod] = useState("cash");
-const [transactionNotes, setTransactionNotes] = useState("");
+  const [showEditTransaction, setShowEditTransaction] = useState(false);
+  const [transactionAmount, setTransactionAmount] = useState("");
+  const [transactionDate, setTransactionDate] = useState("");
+  const [transactionMethod, setTransactionMethod] = useState("cash");
+  const [transactionNotes, setTransactionNotes] = useState("");
   const [lastReceipt, setLastReceipt] = useState<{
     student: Student;
     row: FeeRow;
@@ -388,7 +391,7 @@ const [transactionNotes, setTransactionNotes] = useState("");
         supabase
           .from("institute_students")
           .select(
-            "id, full_name, roll_number, father_name, phone, class_id, admission_date, status"
+            "id, full_name, roll_number, father_name, phone, class_id, admission_date, status",
           )
           .eq("institute_id", activeInstituteId)
           .eq("status", "active")
@@ -396,13 +399,13 @@ const [transactionNotes, setTransactionNotes] = useState("");
         supabase
           .from("institute_student_fees")
           .select(
-            "id, institute_id, student_id, fee_frequency, fee_amount, billing_day"
+            "id, institute_id, student_id, fee_frequency, fee_amount, billing_day",
           )
           .eq("institute_id", activeInstituteId),
         supabase
           .from("institute_fee_payments")
           .select(
-            "id, institute_id, student_id, student_fee_id, billing_period_start, billing_period_end, amount_due, amount_paid, payment_date, payment_method, receipt_number, notes, created_at"
+            "id, institute_id, student_id, student_fee_id, billing_period_start, billing_period_end, amount_due, amount_paid, payment_date, payment_method, receipt_number, notes, created_at",
           )
           .eq("institute_id", activeInstituteId)
           .order("payment_date", { ascending: false }),
@@ -433,16 +436,18 @@ const [transactionNotes, setTransactionNotes] = useState("");
         instituteData?.logo,
         instituteData?.image_url,
         instituteData?.branding_logo_url,
-      ].find((value) => typeof value === "string" && /^https?:\/\//i.test(value));
-      setInstituteLogoUrl(typeof logoCandidate === "string" ? logoCandidate : null);
+      ].find(
+        (value) => typeof value === "string" && /^https?:\/\//i.test(value),
+      );
+      setInstituteLogoUrl(
+        typeof logoCandidate === "string" ? logoCandidate : null,
+      );
 
       const today = dateOnly(new Date());
       const nextRows: FeeRow[] = [];
 
       for (const fee of feeList) {
-        const student = studentList.find(
-          (item) => item.id === fee.student_id
-        );
+        const student = studentList.find((item) => item.id === fee.student_id);
         if (!student) continue;
 
         const periods = getBillingPeriods(fee, student, new Date());
@@ -452,12 +457,12 @@ const [transactionNotes, setTransactionNotes] = useState("");
             (payment) =>
               payment.student_fee_id === fee.id &&
               payment.billing_period_start === period.start &&
-              payment.billing_period_end === period.end
+              payment.billing_period_end === period.end,
           );
 
           const paid = periodPayments.reduce(
             (sum, payment) => sum + Number(payment.amount_paid || 0),
-            0
+            0,
           );
 
           const amountDue = Number(fee.fee_amount);
@@ -504,7 +509,7 @@ const [transactionNotes, setTransactionNotes] = useState("");
       return () => {
         active = false;
       };
-    }, [loadFees])
+    }, [loadFees]),
   );
 
   const refresh = async () => {
@@ -546,10 +551,7 @@ const [transactionNotes, setTransactionNotes] = useState("");
 
     for (const row of rows) {
       const previous = latestByFee.get(row.fee.id);
-      if (
-        !previous ||
-        row.period.start > previous.period.start
-      ) {
+      if (!previous || row.period.start > previous.period.start) {
         latestByFee.set(row.fee.id, row);
       }
     }
@@ -565,7 +567,7 @@ const [transactionNotes, setTransactionNotes] = useState("");
             ? row.balance
             : 0),
       }),
-      { due: 0, paid: 0, pending: 0, overdue: 0 }
+      { due: 0, paid: 0, pending: 0, overdue: 0 },
     );
   }, [rows]);
 
@@ -581,7 +583,11 @@ const [transactionNotes, setTransactionNotes] = useState("");
 
   const openPayment = (row: FeeRow) => {
     if (!canCollect) {
-      showAppAlert("View only", "Only owners and managers can collect fees.", "warning");
+      showAppAlert(
+        "View only",
+        "Only owners and managers can collect fees.",
+        "warning",
+      );
       return;
     }
 
@@ -614,7 +620,11 @@ const [transactionNotes, setTransactionNotes] = useState("");
     const discount = Number(discountText || 0);
 
     if (!Number.isFinite(baseAmount) || baseAmount <= 0) {
-      showAppAlert("Invalid amount", "Enter a fee amount greater than zero.", "error");
+      showAppAlert(
+        "Invalid amount",
+        "Enter a fee amount greater than zero.",
+        "error",
+      );
       return;
     }
 
@@ -624,7 +634,11 @@ const [transactionNotes, setTransactionNotes] = useState("");
     }
 
     if (discountType === "percent" && discount > 100) {
-      showAppAlert("Invalid discount", "Percentage discount cannot exceed 100%.", "error");
+      showAppAlert(
+        "Invalid discount",
+        "Percentage discount cannot exceed 100%.",
+        "error",
+      );
       return;
     }
 
@@ -634,7 +648,11 @@ const [transactionNotes, setTransactionNotes] = useState("");
         : baseAmount - discount;
 
     if (finalAmount < 0) {
-      showAppAlert("Invalid discount", "Discount cannot exceed the fee.", "error");
+      showAppAlert(
+        "Invalid discount",
+        "Discount cannot exceed the fee.",
+        "error",
+      );
       return;
     }
 
@@ -660,195 +678,210 @@ const [transactionNotes, setTransactionNotes] = useState("");
       showAppAlert(
         "Fee amount saved",
         "The final fee amount was saved. The discount breakdown and custom due-date override are not persisted by the current database schema.",
-        "success"
+        "success",
       );
 
       setShowEdit(false);
       await loadFees();
     } catch (error: any) {
-      showAppAlert("Unable to save changes", error?.message || "Please try again.", "error");
+      showAppAlert(
+        "Unable to save changes",
+        error?.message || "Please try again.",
+        "error",
+      );
     } finally {
       setSaving(false);
     }
   };
 
   const openEditTransaction = (payment: Payment) => {
-  if (!canCollect) {
-    showAppAlert(
-      "View only",
-      "Only owners and managers can edit transactions.",
-      "warning"
-    );
-    return;
-  }
-
-  setEditingPayment(payment);
-  setTransactionAmount(String(payment.amount_paid));
-  setTransactionDate(payment.payment_date.slice(0, 10));
-  setTransactionMethod(payment.payment_method || "cash");
-  setTransactionNotes(payment.notes || "");
-  setShowEditTransaction(true);
-};
-
-const saveTransactionEdit = async () => {
-  if (!editingPayment || !instituteId || !canCollect) return;
-
-  const amount = Number(transactionAmount);
-  const date = transactionDate.trim();
-
-  if (!Number.isFinite(amount) || amount <= 0) {
-    showAppAlert(
-      "Invalid amount",
-      "Enter a transaction amount greater than zero.",
-      "error"
-    );
-    return;
-  }
-
-  // Validate both the date format and the actual calendar date.
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    showAppAlert("Invalid date", "Use YYYY-MM-DD for the payment date.", "error");
-    return;
-  }
-
-  const parsedDate = new Date(`${date}T00:00:00`);
-  if (
-    Number.isNaN(parsedDate.getTime()) ||
-    dateOnly(parsedDate) !== date
-  ) {
-    showAppAlert("Invalid date", "Enter a real calendar date.", "error");
-    return;
-  }
-
-  setSaving(true);
-
-  try {
-    // Load the current fee amount and other payments for this exact period.
-    const { data: feeRecord, error: feeError } = await supabase
-      .from("institute_student_fees")
-      .select("fee_amount")
-      .eq("id", editingPayment.student_fee_id)
-      .eq("institute_id", instituteId)
-      .maybeSingle();
-
-    if (feeError) throw feeError;
-    if (!feeRecord) {
-      throw new Error("The fee record could not be found.");
-    }
-
-    const { data: otherPayments, error: paymentsError } = await supabase
-      .from("institute_fee_payments")
-      .select("id, amount_paid")
-      .eq("institute_id", instituteId)
-      .eq("student_fee_id", editingPayment.student_fee_id)
-      .eq("billing_period_start", editingPayment.billing_period_start)
-      .eq("billing_period_end", editingPayment.billing_period_end)
-      .neq("id", editingPayment.id);
-
-    if (paymentsError) throw paymentsError;
-
-    const paidByOtherTransactions = (otherPayments ?? []).reduce(
-      (sum, payment) => sum + Number(payment.amount_paid || 0),
-      0
-    );
-
-    const feeAmount = Number(feeRecord.fee_amount);
-    if (paidByOtherTransactions + amount > feeAmount + 0.009) {
-      throw new Error(
-        `This amount would exceed the fee of ${money(feeAmount)}. ` +
-        `Other transactions total ${money(paidByOtherTransactions)}.`
+    if (!canCollect) {
+      showAppAlert(
+        "View only",
+        "Only owners and managers can edit transactions.",
+        "warning",
       );
+      return;
     }
 
-    const { error: updateError } = await supabase
-      .from("institute_fee_payments")
-      .update({
-        amount_paid: Math.round(amount * 100) / 100,
-        payment_date: date,
-        payment_method: transactionMethod,
-        notes: transactionNotes.trim() || null,
-      })
-      .eq("id", editingPayment.id)
-      .eq("institute_id", instituteId);
+    setEditingPayment(payment);
+    setTransactionAmount(String(payment.amount_paid));
+    setTransactionDate(payment.payment_date.slice(0, 10));
+    setTransactionMethod(payment.payment_method || "cash");
+    setTransactionNotes(payment.notes || "");
+    setShowEditTransaction(true);
+  };
 
-    if (updateError) throw updateError;
+  const saveTransactionEdit = async () => {
+    if (!editingPayment || !instituteId || !canCollect) return;
 
-    setShowEditTransaction(false);
-    setEditingPayment(null);
+    const amount = Number(transactionAmount);
+    const date = transactionDate.trim();
 
-    await loadFees();
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showAppAlert(
+        "Invalid amount",
+        "Enter a transaction amount greater than zero.",
+        "error",
+      );
+      return;
+    }
+
+    // Validate both the date format and the actual calendar date.
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      showAppAlert(
+        "Invalid date",
+        "Use YYYY-MM-DD for the payment date.",
+        "error",
+      );
+      return;
+    }
+
+    const parsedDate = new Date(`${date}T00:00:00`);
+    if (Number.isNaN(parsedDate.getTime()) || dateOnly(parsedDate) !== date) {
+      showAppAlert("Invalid date", "Enter a real calendar date.", "error");
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      // Load the current fee amount and other payments for this exact period.
+      const { data: feeRecord, error: feeError } = await supabase
+        .from("institute_student_fees")
+        .select("fee_amount")
+        .eq("id", editingPayment.student_fee_id)
+        .eq("institute_id", instituteId)
+        .maybeSingle();
+
+      if (feeError) throw feeError;
+      if (!feeRecord) {
+        throw new Error("The fee record could not be found.");
+      }
+
+      const { data: otherPayments, error: paymentsError } = await supabase
+        .from("institute_fee_payments")
+        .select("id, amount_paid")
+        .eq("institute_id", instituteId)
+        .eq("student_fee_id", editingPayment.student_fee_id)
+        .eq("billing_period_start", editingPayment.billing_period_start)
+        .eq("billing_period_end", editingPayment.billing_period_end)
+        .neq("id", editingPayment.id);
+
+      if (paymentsError) throw paymentsError;
+
+      const paidByOtherTransactions = (otherPayments ?? []).reduce(
+        (sum, payment) => sum + Number(payment.amount_paid || 0),
+        0,
+      );
+
+      const feeAmount = Number(feeRecord.fee_amount);
+      if (paidByOtherTransactions + amount > feeAmount + 0.009) {
+        throw new Error(
+          `This amount would exceed the fee of ${money(feeAmount)}. ` +
+            `Other transactions total ${money(paidByOtherTransactions)}.`,
+        );
+      }
+
+      const { error: updateError } = await supabase
+        .from("institute_fee_payments")
+        .update({
+          amount_paid: Math.round(amount * 100) / 100,
+          payment_date: date,
+          payment_method: transactionMethod,
+          notes: transactionNotes.trim() || null,
+        })
+        .eq("id", editingPayment.id)
+        .eq("institute_id", instituteId);
+
+      if (updateError) throw updateError;
+
+      setShowEditTransaction(false);
+      setEditingPayment(null);
+
+      await loadFees();
+
+      showAppAlert(
+        "Transaction updated",
+        "The payment transaction was updated successfully.",
+        "success",
+      );
+    } catch (error: any) {
+      showAppAlert(
+        "Unable to update transaction",
+        error?.message || "Please try again.",
+        "error",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteTransaction = (payment: Payment) => {
+    if (!canCollect) {
+      showAppAlert(
+        "View only",
+        "Only owners and managers can delete transactions.",
+        "warning",
+      );
+      return;
+    }
 
     showAppAlert(
-      "Transaction updated",
-      "The payment transaction was updated successfully.",
-      "success"
-    );
-  } catch (error: any) {
-    showAppAlert(
-      "Unable to update transaction",
-      error?.message || "Please try again.",
-      "error"
-    );
-  } finally {
-    setSaving(false);
-  }
-};
-
-const deleteTransaction = (payment: Payment) => {
-  if (!canCollect) {
-    showAppAlert(
-      "View only",
-      "Only owners and managers can delete transactions.",
-      "warning"
-    );
-    return;
-  }
-
-  showAppAlert(
-    "Delete transaction?",
-    `Delete the payment of ${money(Number(payment.amount_paid))}? This action cannot be undone.`,
-    "warning",
-    {
-      confirmLabel: "Delete",
-      cancelLabel: "Cancel",
-      onConfirm: () => {
-        void confirmDeleteTransaction(payment);
+      "Delete transaction?",
+      `Delete the payment of ${money(Number(payment.amount_paid))}? This action cannot be undone.`,
+      "warning",
+      {
+        confirmLabel: "Delete",
+        cancelLabel: "Cancel",
+        onConfirm: () => {
+          void confirmDeleteTransaction(payment);
+        },
       },
+    );
+  };
+
+  const confirmDeleteTransaction = async (payment: Payment) => {
+    if (!canCollect || !instituteId) return;
+
+    setSaving(true);
+
+    try {
+      // Request the deleted row back. Supabase can return no error when RLS
+      // blocks a DELETE or when the filters match no row, so checking only
+      // `error` can incorrectly show a success message.
+      const { data: deletedRows, error: deleteError } = await supabase
+        .from("institute_fee_payments")
+        .delete()
+        .eq("id", payment.id)
+        .eq("institute_id", instituteId)
+        .select("id");
+
+      if (deleteError) throw deleteError;
+
+      if (!deletedRows || deletedRows.length === 0) {
+        throw new Error(
+          "No transaction was deleted. The payment may not exist, may belong to another institute, or your Supabase Row Level Security (RLS) DELETE policy may be blocking this action. Check the table's DELETE policy and your institute role.",
+        );
+      }
+
+      await loadFees();
+
+      showAppAlert(
+        "Transaction deleted",
+        "The payment record was deleted successfully and the fee balance has been refreshed.",
+        "success",
+      );
+    } catch (error: any) {
+      showAppAlert(
+        "Unable to delete transaction",
+        error?.message || "Please try again.",
+        "error",
+      );
+    } finally {
+      setSaving(false);
     }
-  );
-};
-
-const confirmDeleteTransaction = async (payment: Payment) => {
-  if (!canCollect || !instituteId) return;
-
-  setSaving(true);
-
-  try {
-    const { error: deleteError } = await supabase
-      .from("institute_fee_payments")
-      .delete()
-      .eq("id", payment.id)
-      .eq("institute_id", instituteId);
-
-    if (deleteError) throw deleteError;
-
-    await loadFees();
-
-    showAppAlert(
-      "Transaction deleted",
-      "The payment was deleted and the fee balance has been recalculated.",
-      "success"
-    );
-  } catch (error: any) {
-    showAppAlert(
-      "Unable to delete transaction",
-      error?.message || "Please try again.",
-      "error"
-    );
-  } finally {
-    setSaving(false);
-  }
-};
+  };
 
   const collectPayment = async () => {
     if (!selected || !instituteId || !canCollect) return;
@@ -864,7 +897,7 @@ const confirmDeleteTransaction = async (payment: Payment) => {
       showAppAlert(
         "Amount exceeds balance",
         `The remaining balance is ${money(selected.balance)}.`,
-        "warning"
+        "warning",
       );
       return;
     }
@@ -889,17 +922,17 @@ const confirmDeleteTransaction = async (payment: Payment) => {
 
       const latestPaid = (currentPayments ?? []).reduce(
         (sum, item) => sum + Number(item.amount_paid || 0),
-        0
+        0,
       );
 
       const latestBalance = Math.max(
         0,
-        Number(selected.fee.fee_amount) - latestPaid
+        Number(selected.fee.fee_amount) - latestPaid,
       );
 
       if (amount > latestBalance + 0.009) {
         throw new Error(
-          `Balance changed. Current balance is ${money(latestBalance)}. Refresh and retry.`
+          `Balance changed. Current balance is ${money(latestBalance)}. Refresh and retry.`,
         );
       }
 
@@ -907,8 +940,13 @@ const confirmDeleteTransaction = async (payment: Payment) => {
       const { data: generatedReceiptNumber, error: receiptNumberError } =
         await supabase.rpc("next_fee_receipt_number");
       if (receiptNumberError) throw receiptNumberError;
-      if (typeof generatedReceiptNumber !== "string" || !generatedReceiptNumber) {
-        throw new Error("Could not generate a receipt number. Please try again.");
+      if (
+        typeof generatedReceiptNumber !== "string" ||
+        !generatedReceiptNumber
+      ) {
+        throw new Error(
+          "Could not generate a receipt number. Please try again.",
+        );
       }
       const receiptNumber = generatedReceiptNumber;
 
@@ -928,7 +966,7 @@ const confirmDeleteTransaction = async (payment: Payment) => {
           notes: notes.trim() || null,
         })
         .select(
-          "id, institute_id, student_id, student_fee_id, billing_period_start, billing_period_end, amount_due, amount_paid, payment_date, payment_method, receipt_number, notes, created_at"
+          "id, institute_id, student_id, student_fee_id, billing_period_start, billing_period_end, amount_due, amount_paid, payment_date, payment_method, receipt_number, notes, created_at",
         )
         .single();
 
@@ -958,7 +996,7 @@ const confirmDeleteTransaction = async (payment: Payment) => {
       showAppAlert(
         "Payment not saved",
         error?.message || "Unable to record payment.",
-        "error"
+        "error",
       );
     } finally {
       setSaving(false);
@@ -969,21 +1007,27 @@ const confirmDeleteTransaction = async (payment: Payment) => {
     const phone = (student.phone || "").replace(/[^\d]/g, "");
 
     if (!phone) {
-      showAppAlert("Phone number missing", "Add the student's WhatsApp number first.", "warning");
+      showAppAlert(
+        "Phone number missing",
+        "Add the student's WhatsApp number first.",
+        "warning",
+      );
       return;
     }
 
     // Indian mobile numbers are stored as 10 digits; add India's country code.
-    const internationalPhone =
-      phone.length === 10 ? `91${phone}` : phone;
+    const internationalPhone = phone.length === 10 ? `91${phone}` : phone;
 
-    const url =
-      `https://wa.me/${internationalPhone}?text=${encodeURIComponent(message)}`;
+    const url = `https://wa.me/${internationalPhone}?text=${encodeURIComponent(message)}`;
 
     try {
       await Linking.openURL(url);
     } catch {
-      showAppAlert("WhatsApp unavailable", "Install WhatsApp or check the phone number.", "error");
+      showAppAlert(
+        "WhatsApp unavailable",
+        "Install WhatsApp or check the phone number.",
+        "error",
+      );
     }
   };
 
@@ -1022,55 +1066,117 @@ const confirmDeleteTransaction = async (payment: Payment) => {
     );
   };
 
-  const shareReceipt = async () => {
-    if (!lastReceipt) return;
-
-    const rawPhone = (lastReceipt.student.phone || "").replace(/[^\\d]/g, "");
-    if (!rawPhone) {
-      showAppAlert(
-        "Phone number missing",
-        "Add the student's WhatsApp number before sharing the receipt.",
-        "warning"
-      );
-      return;
+  const captureReceiptImage = async (): Promise<string> => {
+    const capturedUri = await receiptViewRef.current?.capture();
+    if (!capturedUri) {
+      throw new Error("Could not create the receipt image. Please try again.");
     }
-
-    // WhatsApp text sharing works without the react-native-share native module.
-    // Expo Go can open WhatsApp using this URL, but cannot attach a captured image
-    // through the standard React Native Share API.
-    const internationalPhone = rawPhone.length === 10 ? `91${rawPhone}` : rawPhone;
-    const message = encodeURIComponent(buildReceiptMessage());
-    const whatsappUrl = `https://wa.me/${internationalPhone}?text=${message}`;
-
-    try {
-      const canOpen = await Linking.canOpenURL(whatsappUrl);
-      if (!canOpen) {
-        throw new Error("Unable to open WhatsApp. Please check that it is installed.");
-      }
-      await Linking.openURL(whatsappUrl);
-    } catch (error: any) {
-      showAppAlert(
-        "Unable to open WhatsApp",
-        error?.message || "Please install WhatsApp or use the Share Text option.",
-        "error"
-      );
-    }
+    // react-native-share expects a local file URI for image sharing.
+    return capturedUri.startsWith("file://") ||
+      capturedUri.startsWith("content://")
+      ? capturedUri
+      : `file://${capturedUri}`;
   };
 
-  const shareReceiptText = async () => {
-    if (!lastReceipt) return;
-    try {
+  const getInternationalWhatsAppNumber = (): string => {
+    const rawPhone = String(lastReceipt?.student.phone ?? "").replace(
+      /\D/g,
+      "",
+    );
+    let phone = rawPhone.startsWith("00") ? rawPhone.slice(2) : rawPhone;
+    if (phone.length === 11 && phone.startsWith("0")) phone = phone.slice(1);
+
+    if (phone.length === 10) return `91${phone}`;
+    if (phone.length === 12 && phone.startsWith("91")) return phone;
+    return "";
+  };
+
+
+  // Right button: open Android's native share sheet with the receipt PNG and text.
+  // The user can choose WhatsApp, Files, Drive, Bluetooth, or another available app.
+  // Share the receipt image through WhatsApp.
+
+const shareReceipt = async () => {
+  if (!lastReceipt) return;
+
+  const internationalPhone = getInternationalWhatsAppNumber();
+
+  if (!internationalPhone) {
+    showAppAlert(
+      "Invalid WhatsApp number",
+      "Enter a valid 10-digit Indian mobile number, optionally prefixed with +91.",
+      "warning",
+    );
+    return;
+  }
+
+  try {
+    const imageUri = await captureReceiptImage();
+    const message = buildReceiptMessage();
+
+    // Share the receipt image using Expo's supported sharing API.
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(imageUri, {
+        mimeType: "image/png",
+        dialogTitle: "Share fee receipt",
+        UTI: "public.png",
+      });
+    } else {
+      await Share.share({ message });
+    }
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : String(error);
+
+    if (/cancel|dismiss/i.test(message)) return;
+
+    console.error("Receipt sharing failed:", error);
+
+    showAppAlert(
+      "Unable to share receipt",
+      message || "Please try again.",
+      "error",
+    );
+  }
+};
+
+const shareReceiptText = async () => {
+  if (!lastReceipt) return;
+
+  try {
+    const imageUri = await captureReceiptImage();
+
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(imageUri, {
+        mimeType: "image/png",
+        dialogTitle: "Share or save fee receipt",
+        UTI: "public.png",
+      });
+    } else {
       await Share.share({ message: buildReceiptMessage() });
-    } catch (error: any) {
-      showAppAlert("Unable to share", error?.message || "Try again.", "error");
     }
-  };
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : String(error);
+
+    if (/cancel|dismiss/i.test(message)) return;
+
+    console.error("Receipt sharing failed:", error);
+
+    showAppAlert(
+      "Unable to share or save receipt",
+      message || "Please try again.",
+      "error",
+    );
+  }
+};
+
 
   const renderSummary = (
     title: string,
     value: string,
     icon: IconName,
-    color: string
+    color: string,
   ) => (
     <View style={styles.summaryCard}>
       <View style={[styles.summaryIcon, { backgroundColor: `${color}15` }]}>
@@ -1083,11 +1189,7 @@ const confirmDeleteTransaction = async (payment: Payment) => {
 
   const renderFeeRow = ({ item }: { item: FeeRow }) => {
     const color =
-      item.status === "Paid"
-        ? GREEN
-        : item.status === "Unpaid"
-          ? RED
-          : AMBER;
+      item.status === "Paid" ? GREEN : item.status === "Unpaid" ? RED : AMBER;
 
     return (
       <TouchableOpacity
@@ -1175,7 +1277,9 @@ const confirmDeleteTransaction = async (payment: Payment) => {
             onPress={() => sendReminder(item)}
           >
             <Feather name="message-circle" size={16} color={GREEN} />
-            <Text style={styles.reminderButtonText}>Send WhatsApp reminder</Text>
+            <Text style={styles.reminderButtonText}>
+              Send WhatsApp reminder
+            </Text>
           </TouchableOpacity>
         ) : null}
       </TouchableOpacity>
@@ -1195,7 +1299,8 @@ const confirmDeleteTransaction = async (payment: Payment) => {
             {student?.full_name ?? "Student"}
           </Text>
           <Text style={styles.studentMeta}>
-            {formatDate(item.payment_date)} · {item.payment_method.replace(/_/g, " ")}
+            {formatDate(item.payment_date)} ·{" "}
+            {item.payment_method.replace(/_/g, " ")}
           </Text>
           <Text style={styles.receiptText}>
             Receipt: {item.receipt_number || item.id.slice(0, 8).toUpperCase()}
@@ -1206,32 +1311,32 @@ const confirmDeleteTransaction = async (payment: Payment) => {
           </Text>
         </View>
         <View style={styles.historyRight}>
-  <Text style={styles.historyAmount}>
-    +{money(Number(item.amount_paid))}
-  </Text>
+          <Text style={styles.historyAmount}>
+            +{money(Number(item.amount_paid))}
+          </Text>
 
-  {canCollect && (
-    <View style={styles.transactionActions}>
-      <TouchableOpacity
-        style={styles.transactionEditButton}
-        onPress={() => openEditTransaction(item)}
-        disabled={saving}
-      >
-        <Feather name="edit-2" size={13} color={NAVY} />
-        <Text style={styles.transactionEditText}>Edit</Text>
-      </TouchableOpacity>
+          {canCollect && (
+            <View style={styles.transactionActions}>
+              <TouchableOpacity
+                style={styles.transactionEditButton}
+                onPress={() => openEditTransaction(item)}
+                disabled={saving}
+              >
+                <Feather name="edit-2" size={13} color={NAVY} />
+                <Text style={styles.transactionEditText}>Edit</Text>
+              </TouchableOpacity>
 
-      <TouchableOpacity
-        style={styles.transactionDeleteButton}
-        onPress={() => deleteTransaction(item)}
-        disabled={saving}
-      >
-        <Feather name="trash-2" size={13} color={RED} />
-        <Text style={styles.transactionDeleteText}>Delete</Text>
-      </TouchableOpacity>
-    </View>
-  )}
-</View>
+              <TouchableOpacity
+                style={styles.transactionDeleteButton}
+                onPress={() => deleteTransaction(item)}
+                disabled={saving}
+              >
+                <Feather name="trash-2" size={13} color={RED} />
+                <Text style={styles.transactionDeleteText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
       </View>
     );
   };
@@ -1274,7 +1379,12 @@ const confirmDeleteTransaction = async (payment: Payment) => {
       >
         <View style={styles.summaryGrid}>
           {renderSummary("Total fees", money(totals.due), "file-text", NAVY)}
-          {renderSummary("Collected", money(totals.paid), "check-circle", GREEN)}
+          {renderSummary(
+            "Collected",
+            money(totals.paid),
+            "check-circle",
+            GREEN,
+          )}
           {renderSummary("Pending", money(totals.pending), "clock", AMBER)}
           {renderSummary("Overdue", money(totals.overdue), "alert-circle", RED)}
         </View>
@@ -1395,7 +1505,9 @@ const confirmDeleteTransaction = async (payment: Payment) => {
 
             <View style={styles.listHeadingRow}>
               <Text style={styles.sectionHeading}>Student fee records</Text>
-              <Text style={styles.countText}>{filteredRows.length} records</Text>
+              <Text style={styles.countText}>
+                {filteredRows.length} records
+              </Text>
             </View>
 
             {loading ? (
@@ -1477,7 +1589,9 @@ const confirmDeleteTransaction = async (payment: Payment) => {
                 </Text>
               </View>
               <View style={styles.studentInfo}>
-                <Text style={styles.modalTitle}>{selectedStudent?.full_name}</Text>
+                <Text style={styles.modalTitle}>
+                  {selectedStudent?.full_name}
+                </Text>
                 <Text style={styles.modalSubtitle}>
                   Roll No. {selectedStudent?.roll_number}
                 </Text>
@@ -1500,7 +1614,12 @@ const confirmDeleteTransaction = async (payment: Payment) => {
                   onPress={() => {
                     const row = studentPeriods.find((r) => r.balance > 0);
                     if (row) openPayment(row);
-                    else showAppAlert("No outstanding fees", "This student has no balance to collect.", "info");
+                    else
+                      showAppAlert(
+                        "No outstanding fees",
+                        "This student has no balance to collect.",
+                        "info",
+                      );
                   }}
                 >
                   <Feather name="check-circle" size={16} color={WHITE} />
@@ -1533,16 +1652,28 @@ const confirmDeleteTransaction = async (payment: Payment) => {
                       : AMBER;
 
                 return (
-                  <View key={`${row.fee.id}-${row.period.start}`} style={styles.periodCard}>
+                  <View
+                    key={`${row.fee.id}-${row.period.start}`}
+                    style={styles.periodCard}
+                  >
                     <View style={styles.periodHeader}>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.studentName}>{row.period.label}</Text>
+                        <Text style={styles.studentName}>
+                          {row.period.label}
+                        </Text>
                         <Text style={styles.studentMeta}>
                           Due {formatDate(row.period.dueDate)}
                         </Text>
                       </View>
-                      <View style={[styles.statusBadge, { backgroundColor: `${color}15` }]}>
-                        <Text style={[styles.statusText, { color }]}>{row.status}</Text>
+                      <View
+                        style={[
+                          styles.statusBadge,
+                          { backgroundColor: `${color}15` },
+                        ]}
+                      >
+                        <Text style={[styles.statusText, { color }]}>
+                          {row.status}
+                        </Text>
                       </View>
                     </View>
 
@@ -1564,13 +1695,19 @@ const confirmDeleteTransaction = async (payment: Payment) => {
                           style={styles.smallPrimaryButton}
                           onPress={() => openPayment(row)}
                         >
-                          <Text style={styles.smallPrimaryText}>Mark as paid / collect</Text>
+                          <Text style={styles.smallPrimaryText}>
+                            Mark as paid / collect
+                          </Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.smallSecondaryButton}
                           onPress={() => sendReminder(row)}
                         >
-                          <Feather name="message-circle" size={14} color={GREEN} />
+                          <Feather
+                            name="message-circle"
+                            size={14}
+                            color={GREEN}
+                          />
                           <Text style={styles.smallSecondaryText}>Remind</Text>
                         </TouchableOpacity>
                       </View>
@@ -1624,12 +1761,28 @@ const confirmDeleteTransaction = async (payment: Payment) => {
                   showsVerticalScrollIndicator={false}
                 >
                   <View style={styles.paymentBreakdown}>
-                    <PaymentLine label="Billing period" value={selected.period.label} />
-                    <PaymentLine label="Due date" value={formatDate(selected.period.dueDate)} />
-                    <PaymentLine label="Total fee" value={money(selected.amountDue)} />
-                    <PaymentLine label="Already paid" value={money(selected.paid)} />
+                    <PaymentLine
+                      label="Billing period"
+                      value={selected.period.label}
+                    />
+                    <PaymentLine
+                      label="Due date"
+                      value={formatDate(selected.period.dueDate)}
+                    />
+                    <PaymentLine
+                      label="Total fee"
+                      value={money(selected.amountDue)}
+                    />
+                    <PaymentLine
+                      label="Already paid"
+                      value={money(selected.paid)}
+                    />
                     <View style={styles.paymentDivider} />
-                    <PaymentLine label="Remaining balance" value={money(selected.balance)} bold />
+                    <PaymentLine
+                      label="Remaining balance"
+                      value={money(selected.balance)}
+                      bold
+                    />
                   </View>
 
                   <Text style={styles.inputLabel}>Payment amount (₹)</Text>
@@ -1643,7 +1796,9 @@ const confirmDeleteTransaction = async (payment: Payment) => {
                     editable={!saving}
                   />
 
-                  <Text style={styles.inputLabel}>Payment date (YYYY-MM-DD)</Text>
+                  <Text style={styles.inputLabel}>
+                    Payment date (YYYY-MM-DD)
+                  </Text>
                   <TextInput
                     value={paymentDate}
                     onChangeText={setPaymentDate}
@@ -1656,9 +1811,21 @@ const confirmDeleteTransaction = async (payment: Payment) => {
                   <Text style={styles.inputLabel}>Payment method</Text>
                   <View style={styles.methodRow}>
                     {[
-                      { label: "Cash", value: "cash", icon: "credit-card" as IconName },
-                      { label: "UPI", value: "upi", icon: "smartphone" as IconName },
-                      { label: "Bank", value: "bank_transfer", icon: "briefcase" as IconName },
+                      {
+                        label: "Cash",
+                        value: "cash",
+                        icon: "credit-card" as IconName,
+                      },
+                      {
+                        label: "UPI",
+                        value: "upi",
+                        icon: "smartphone" as IconName,
+                      },
+                      {
+                        label: "Bank",
+                        value: "bank_transfer",
+                        icon: "briefcase" as IconName,
+                      },
                     ].map((item) => (
                       <TouchableOpacity
                         key={item.value}
@@ -1707,7 +1874,9 @@ const confirmDeleteTransaction = async (payment: Payment) => {
                     ) : (
                       <>
                         <Feather name="check-circle" size={18} color={GOLD} />
-                        <Text style={styles.submitButtonText}>Confirm payment</Text>
+                        <Text style={styles.submitButtonText}>
+                          Confirm payment
+                        </Text>
                       </>
                     )}
                   </TouchableOpacity>
@@ -1718,138 +1887,145 @@ const confirmDeleteTransaction = async (payment: Payment) => {
         </View>
       </Modal>
 
-
       {/* Edit transaction */}
-<Modal
-  visible={showEditTransaction}
-  transparent
-  animationType="slide"
-  onRequestClose={() => !saving && setShowEditTransaction(false)}
->
-  <View style={styles.modalBackdrop}>
-    <TouchableOpacity
-      style={styles.backdropTouch}
-      activeOpacity={1}
-      onPress={() => !saving && setShowEditTransaction(false)}
-    />
-
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      style={styles.sheetKeyboard}
-    >
-      <View style={styles.sheetCard}>
-        <View style={styles.sheetHandle} />
-
-        <View style={styles.modalHeader}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.modalTitle}>Edit transaction</Text>
-            <Text style={styles.modalSubtitle}>
-              Receipt: {editingPayment?.receipt_number || "—"}
-            </Text>
-          </View>
-
+      <Modal
+        visible={showEditTransaction}
+        transparent
+        animationType="slide"
+        onRequestClose={() => !saving && setShowEditTransaction(false)}
+      >
+        <View style={styles.modalBackdrop}>
           <TouchableOpacity
-            style={styles.modalClose}
-            onPress={() => setShowEditTransaction(false)}
-            disabled={saving}
+            style={styles.backdropTouch}
+            activeOpacity={1}
+            onPress={() => !saving && setShowEditTransaction(false)}
+          />
+
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={styles.sheetKeyboard}
           >
-            <Feather name="x" size={20} color={NAVY} />
-          </TouchableOpacity>
-        </View>
+            <View style={styles.sheetCard}>
+              <View style={styles.sheetHandle} />
 
-        <ScrollView keyboardShouldPersistTaps="handled">
-          <Text style={styles.inputLabel}>Payment amount (₹)</Text>
-          <TextInput
-            value={transactionAmount}
-            onChangeText={setTransactionAmount}
-            keyboardType="decimal-pad"
-            style={styles.amountInput}
-            placeholder="Enter amount"
-            placeholderTextColor={MUTED}
-            editable={!saving}
-          />
+              <View style={styles.modalHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalTitle}>Edit transaction</Text>
+                  <Text style={styles.modalSubtitle}>
+                    Receipt: {editingPayment?.receipt_number || "—"}
+                  </Text>
+                </View>
 
-          <Text style={styles.inputLabel}>Payment date (YYYY-MM-DD)</Text>
-          <TextInput
-            value={transactionDate}
-            onChangeText={setTransactionDate}
-            style={styles.amountInput}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor={MUTED}
-            editable={!saving}
-          />
-
-          <Text style={styles.inputLabel}>Payment method</Text>
-          <View style={styles.methodRow}>
-            {[
-              { label: "Cash", value: "cash", icon: "credit-card" as IconName },
-              { label: "UPI", value: "upi", icon: "smartphone" as IconName },
-              {
-                label: "Bank",
-                value: "bank_transfer",
-                icon: "briefcase" as IconName,
-              },
-            ].map((option) => (
-              <TouchableOpacity
-                key={option.value}
-                style={[
-                  styles.methodButton,
-                  transactionMethod === option.value &&
-                    styles.methodButtonActive,
-                ]}
-                onPress={() => setTransactionMethod(option.value)}
-                disabled={saving}
-              >
-                <Feather
-                  name={option.icon}
-                  size={16}
-                  color={transactionMethod === option.value ? GOLD : NAVY}
-                />
-                <Text
-                  style={[
-                    styles.methodText,
-                    transactionMethod === option.value &&
-                      styles.methodTextActive,
-                  ]}
+                <TouchableOpacity
+                  style={styles.modalClose}
+                  onPress={() => setShowEditTransaction(false)}
+                  disabled={saving}
                 >
-                  {option.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+                  <Feather name="x" size={20} color={NAVY} />
+                </TouchableOpacity>
+              </View>
 
-          <Text style={styles.inputLabel}>Note (optional)</Text>
-          <TextInput
-            value={transactionNotes}
-            onChangeText={setTransactionNotes}
-            style={[styles.amountInput, styles.notesInput]}
-            placeholder="Transaction reference or remarks"
-            placeholderTextColor={MUTED}
-            multiline
-            editable={!saving}
-          />
+              <ScrollView keyboardShouldPersistTaps="handled">
+                <Text style={styles.inputLabel}>Payment amount (₹)</Text>
+                <TextInput
+                  value={transactionAmount}
+                  onChangeText={setTransactionAmount}
+                  keyboardType="decimal-pad"
+                  style={styles.amountInput}
+                  placeholder="Enter amount"
+                  placeholderTextColor={MUTED}
+                  editable={!saving}
+                />
 
-          <TouchableOpacity
-            style={[styles.submitButton, saving && { opacity: 0.6 }]}
-            onPress={saveTransactionEdit}
-            disabled={saving}
-          >
-            {saving ? (
-              <ActivityIndicator color={WHITE} />
-            ) : (
-              <>
-                <Feather name="save" size={18} color={GOLD} />
-                <Text style={styles.submitButtonText}>
-                  Save transaction
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
-    </KeyboardAvoidingView>
-  </View>
-</Modal>
+                <Text style={styles.inputLabel}>Payment date (YYYY-MM-DD)</Text>
+                <TextInput
+                  value={transactionDate}
+                  onChangeText={setTransactionDate}
+                  style={styles.amountInput}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={MUTED}
+                  editable={!saving}
+                />
+
+                <Text style={styles.inputLabel}>Payment method</Text>
+                <View style={styles.methodRow}>
+                  {[
+                    {
+                      label: "Cash",
+                      value: "cash",
+                      icon: "credit-card" as IconName,
+                    },
+                    {
+                      label: "UPI",
+                      value: "upi",
+                      icon: "smartphone" as IconName,
+                    },
+                    {
+                      label: "Bank",
+                      value: "bank_transfer",
+                      icon: "briefcase" as IconName,
+                    },
+                  ].map((option) => (
+                    <TouchableOpacity
+                      key={option.value}
+                      style={[
+                        styles.methodButton,
+                        transactionMethod === option.value &&
+                          styles.methodButtonActive,
+                      ]}
+                      onPress={() => setTransactionMethod(option.value)}
+                      disabled={saving}
+                    >
+                      <Feather
+                        name={option.icon}
+                        size={16}
+                        color={transactionMethod === option.value ? GOLD : NAVY}
+                      />
+                      <Text
+                        style={[
+                          styles.methodText,
+                          transactionMethod === option.value &&
+                            styles.methodTextActive,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={styles.inputLabel}>Note (optional)</Text>
+                <TextInput
+                  value={transactionNotes}
+                  onChangeText={setTransactionNotes}
+                  style={[styles.amountInput, styles.notesInput]}
+                  placeholder="Transaction reference or remarks"
+                  placeholderTextColor={MUTED}
+                  multiline
+                  editable={!saving}
+                />
+
+                <TouchableOpacity
+                  style={[styles.submitButton, saving && { opacity: 0.6 }]}
+                  onPress={saveTransactionEdit}
+                  disabled={saving}
+                >
+                  {saving ? (
+                    <ActivityIndicator color={WHITE} />
+                  ) : (
+                    <>
+                      <Feather name="save" size={18} color={GOLD} />
+                      <Text style={styles.submitButtonText}>
+                        Save transaction
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
 
       {/* Fee editing */}
       <Modal
@@ -1898,10 +2074,10 @@ const confirmDeleteTransaction = async (payment: Payment) => {
 
               <Text style={styles.inputLabel}>Discount type</Text>
               <View style={styles.methodRow}>
-                {([
+                {[
                   { label: "Fixed ₹", value: "amount" as const },
                   { label: "Percent %", value: "percent" as const },
-                ]).map((item) => (
+                ].map((item) => (
                   <TouchableOpacity
                     key={item.value}
                     style={[
@@ -1959,8 +2135,10 @@ const confirmDeleteTransaction = async (payment: Payment) => {
                   label="Discount"
                   value={money(
                     discountType === "percent"
-                      ? (Number(editAmount) || 0) * (Number(discountText) || 0) / 100
-                      : Number(discountText) || 0
+                      ? ((Number(editAmount) || 0) *
+                          (Number(discountText) || 0)) /
+                          100
+                      : Number(discountText) || 0,
                   )}
                 />
                 <View style={styles.paymentDivider} />
@@ -1971,9 +2149,11 @@ const confirmDeleteTransaction = async (payment: Payment) => {
                       0,
                       (Number(editAmount) || 0) -
                         (discountType === "percent"
-                          ? (Number(editAmount) || 0) * (Number(discountText) || 0) / 100
-                          : Number(discountText) || 0)
-                    )
+                          ? ((Number(editAmount) || 0) *
+                              (Number(discountText) || 0)) /
+                            100
+                          : Number(discountText) || 0),
+                    ),
                   )}
                   bold
                 />
@@ -2023,70 +2203,87 @@ const confirmDeleteTransaction = async (payment: Payment) => {
           <View style={styles.sheetCard}>
             <View style={styles.sheetHandle} />
             <View style={styles.receiptImageViewport}>
-            <ViewShot ref={receiptViewRef} style={styles.receiptShot} options={{ format: "png", quality: 1 }}>
-            <View style={styles.receiptCard}>
-              <View style={styles.receiptBrand}>
-                <View style={styles.receiptLogo}>
-                  {instituteLogoUrl ? (
-                    <Image source={{ uri: instituteLogoUrl }} style={styles.receiptLogoImage} resizeMode="contain" />
-                  ) : (
-                    <Feather name="book-open" size={24} color={GOLD} />
-                  )}
-                </View>
-                <Text style={styles.receiptInstitute}>{instituteName}</Text>
-                <Text style={styles.receiptSubtitle}>FEE PAYMENT RECEIPT</Text>
-              </View>
-
-              {lastReceipt && (
-                <>
-                  <View style={styles.receiptSuccess}>
-                    <Feather name="check-circle" size={28} color={GREEN} />
-                    <Text style={styles.receiptSuccessText}>Payment recorded</Text>
-                  </View>
-
-                  <View style={styles.receiptAmountBox}>
-                    <Text style={styles.receiptAmountLabel}>Amount received</Text>
-                    <Text style={styles.receiptAmount}>
-                      {money(Number(lastReceipt.payment.amount_paid))}
+              <ViewShot
+                ref={receiptViewRef}
+                style={styles.receiptShot}
+                options={{ format: "png", quality: 1 }}
+              >
+                <View style={styles.receiptCard}>
+                  <View style={styles.receiptBrand}>
+                    <View style={styles.receiptLogo}>
+                      {instituteLogoUrl ? (
+                        <Image
+                          source={{ uri: instituteLogoUrl }}
+                          style={styles.receiptLogoImage}
+                          resizeMode="contain"
+                        />
+                      ) : (
+                        <Feather name="book-open" size={24} color={GOLD} />
+                      )}
+                    </View>
+                    <Text style={styles.receiptInstitute}>{instituteName}</Text>
+                    <Text style={styles.receiptSubtitle}>
+                      FEE PAYMENT RECEIPT
                     </Text>
                   </View>
 
-                  <ReceiptLine
-                    label="Receipt number"
-                    value={lastReceipt.payment.receipt_number || "—"}
-                  />
-                  <ReceiptLine
-                    label="Student"
-                    value={lastReceipt.student.full_name}
-                  />
-                  <ReceiptLine
-                    label="Roll number"
-                    value={lastReceipt.student.roll_number}
-                  />
-                  <ReceiptLine
-                    label="Fee period"
-                    value={lastReceipt.row.period.label}
-                  />
-                  <ReceiptLine
-                    label="Payment date"
-                    value={formatDate(lastReceipt.payment.payment_date)}
-                  />
-                  <ReceiptLine
-                    label="Payment mode"
-                    value={lastReceipt.payment.payment_method.replace(/_/g, " ")}
-                  />
-                  <ReceiptLine
-                    label="Total fee"
-                    value={money(lastReceipt.row.amountDue)}
-                  />
-                  <ReceiptLine
-                    label="Remaining balance"
-                    value={money(lastReceipt.row.balance)}
-                  />
-                </>
-              )}
-            </View>
-            </ViewShot>
+                  {lastReceipt && (
+                    <>
+                      <View style={styles.receiptSuccess}>
+                        <Feather name="check-circle" size={28} color={GREEN} />
+                        <Text style={styles.receiptSuccessText}>
+                          Payment recorded
+                        </Text>
+                      </View>
+
+                      <View style={styles.receiptAmountBox}>
+                        <Text style={styles.receiptAmountLabel}>
+                          Amount received
+                        </Text>
+                        <Text style={styles.receiptAmount}>
+                          {money(Number(lastReceipt.payment.amount_paid))}
+                        </Text>
+                      </View>
+
+                      <ReceiptLine
+                        label="Receipt number"
+                        value={lastReceipt.payment.receipt_number || "—"}
+                      />
+                      <ReceiptLine
+                        label="Student"
+                        value={lastReceipt.student.full_name}
+                      />
+                      <ReceiptLine
+                        label="Roll number"
+                        value={lastReceipt.student.roll_number}
+                      />
+                      <ReceiptLine
+                        label="Fee period"
+                        value={lastReceipt.row.period.label}
+                      />
+                      <ReceiptLine
+                        label="Payment date"
+                        value={formatDate(lastReceipt.payment.payment_date)}
+                      />
+                      <ReceiptLine
+                        label="Payment mode"
+                        value={lastReceipt.payment.payment_method.replace(
+                          /_/g,
+                          " ",
+                        )}
+                      />
+                      <ReceiptLine
+                        label="Total fee"
+                        value={money(lastReceipt.row.amountDue)}
+                      />
+                      <ReceiptLine
+                        label="Remaining balance"
+                        value={money(lastReceipt.row.balance)}
+                      />
+                    </>
+                  )}
+                </View>
+              </ViewShot>
             </View>
 
             <View style={styles.receiptActions}>
@@ -2095,19 +2292,23 @@ const confirmDeleteTransaction = async (payment: Payment) => {
                 onPress={shareReceipt}
               >
                 <Feather name="message-circle" size={16} color={WHITE} />
-                <Text style={styles.primaryActionText}>Share receipt on WhatsApp</Text>
+                <Text style={styles.primaryActionText}>Share on WhatsApp</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.secondaryAction}
                 onPress={shareReceiptText}
               >
                 <Feather name="share-2" size={16} color={NAVY} />
-                <Text style={styles.secondaryActionText}>Share receipt</Text>
+                <Text style={styles.secondaryActionText}>
+                  Share / Save Image
+                </Text>
               </TouchableOpacity>
             </View>
 
             <Text style={styles.noticeText}>
-              Opens WhatsApp with the receipt details as a pre-filled message. Image attachment is not supported by this Expo Go-compatible option.
+              WhatsApp shares the receipt image and details to the student chat.
+              Share / Save Image opens Android’s native share sheet so you can
+              choose an app or save the PNG.
             </Text>
 
             <TouchableOpacity
@@ -2469,7 +2670,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(9,22,43,0.48)",
     justifyContent: "flex-end",
   },
-  backdropTouch: { ...StyleSheet.absoluteFillObject },
+  backdropTouch: { ...StyleSheet.absoluteFill },
   sheetKeyboard: { justifyContent: "flex-end" },
   sheetCard: {
     backgroundColor: BG,
@@ -2646,7 +2847,11 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
 
-  receiptImageViewport: { backgroundColor: WHITE, borderRadius: 18, overflow: "hidden" },
+  receiptImageViewport: {
+    backgroundColor: WHITE,
+    borderRadius: 18,
+    overflow: "hidden",
+  },
   receiptShot: { backgroundColor: WHITE },
   receiptLogoImage: { width: 48, height: 48, borderRadius: 12 },
   receiptCard: {
@@ -2681,7 +2886,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 12,
   },
-  receiptSuccessText: { color: GREEN, fontSize: 12, fontWeight: "800", marginTop: 5 },
+  receiptSuccessText: {
+    color: GREEN,
+    fontSize: 12,
+    fontWeight: "800",
+    marginTop: 5,
+  },
   receiptAmountBox: {
     backgroundColor: NAVY,
     alignItems: "center",

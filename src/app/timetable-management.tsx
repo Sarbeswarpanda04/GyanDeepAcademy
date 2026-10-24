@@ -938,7 +938,7 @@ const styles = StyleSheet.create({
   tipText: { flex: 1, color: "#79551C", fontSize: 12, lineHeight: 18 },
   modalRoot: { flex: 1, justifyContent: "flex-end" },
   scrim: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(11,20,37,0.48)",
   },
   sheet: {

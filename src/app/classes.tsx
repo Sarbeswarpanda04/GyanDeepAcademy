@@ -1031,7 +1031,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   scrim: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(17, 27, 40, 0.38)",
   },
   formSheet: {

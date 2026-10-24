@@ -1,4 +1,3 @@
-
 import { useCallback, useState } from "react";
 import {
   Alert,
@@ -18,52 +17,123 @@ import FloatingTabBar from "../components/FloatingTabBar";
 
 const NAVY = "#202F42";
 const BG = "#F1F5F8";
-const MUTED = "#9DB1BE";
+const MUTED = "#8297A8";
 const ICON = "#526D85";
 const RED = "#D62828";
 
 type IconName = React.ComponentProps<typeof Feather>["name"];
 
-type SettingsGroup = {
-  title: string;
-  items: {
-    icon: IconName;
-    label: string;
-  }[];
+type SettingsItem = {
+  icon: IconName;
+  label: string;
+  route: string;
 };
 
+type SettingsGroup = {
+  title: string;
+  items: SettingsItem[];
+};
+
+// Routes must match files inside your app/ directory.
 const groups: SettingsGroup[] = [
   {
     title: "INSTITUTE",
     items: [
-      { icon: "briefcase", label: "Institute profile" },
-      { icon: "layers", label: "Batches" },
-      { icon: "book-open", label: "Classes" },
-      { icon: "credit-card", label: "Fee plans" },
-      { icon: "sliders", label: "Fee settings" },
-      { icon: "credit-card", label: "ID card settings" },
-      { icon: "file-text", label: "Exam report card" },
+      {
+        icon: "briefcase",
+        label: "Institute profile",
+        route: "/institute-profile",
+      },
+      {
+        icon: "layers",
+        label: "Batches",
+        route: "/batches",
+      },
+      {
+        icon: "book-open",
+        label: "Classes",
+        route: "/classes",
+      },
+      {
+        icon: "credit-card",
+        label: "Fee plans",
+        route: "/fee-plans",
+      },
+      {
+        icon: "sliders",
+        label: "Fee settings",
+        route: "/fee-settings",
+      },
+      {
+        icon: "credit-card",
+        label: "ID card settings",
+        route: "/student-id-card-settings",
+      },
+      {
+        icon: "file-text",
+        label: "Exam report card",
+        route: "/exam-report-card",
+      },
     ],
   },
   {
     title: "OPERATIONS",
     items: [
-      { icon: "users", label: "Team" },
-      { icon: "user-check", label: "Staff/teachers" },
-      { icon: "grid", label: "QR Join" },
-      { icon: "user-plus", label: "Join requests" },
-      { icon: "bar-chart-2", label: "Reports & export" },
+      {
+        icon: "users",
+        label: "Team",
+        route: "/team",
+      },
+      {
+        icon: "user-check",
+        label: "Staff/teachers",
+        route: "/staff",
+      },
+      {
+        icon: "grid",
+        label: "QR Join",
+        route: "/qr-join",
+      },
+      {
+        icon: "user-plus",
+        label: "Join requests",
+        route: "/join-requests",
+      },
+      {
+        icon: "bar-chart-2",
+        label: "Reports & export",
+        route: "/reports",
+      },
     ],
   },
   {
     title: "APP",
     items: [
-      { icon: "play-circle", label: "How to use the app" },
-      { icon: "settings", label: "App settings" },
-      { icon: "shield", label: "Privacy policy" },
-      { icon: "file-text", label: "Terms & conditions" },
-      { icon: "rotate-ccw", label: "Refund policy" },
-      { icon: "help-circle", label: "Help & support" },
+      {
+        icon: "play-circle",
+        label: "How to use the app",
+        route: "/help",
+      },
+      {
+        icon: "settings",
+        label: "App settings",
+        route: "/app-settings",
+      },
+      {
+        icon: "shield",
+        label: "Privacy policy",
+        route: "/privacy-policy",
+      },
+      {
+        icon: "file-text",
+        label: "Terms & conditions",
+        route: "/terms",
+      },
+      {
+        icon: "help-circle",
+        label: "Help & support",
+        route: "/support",
+      },
     ],
   },
 ];
@@ -120,7 +190,7 @@ export default function SettingsScreen() {
     }, [loadInstitute])
   );
 
-  async function handleLogout() {
+  const handleLogout = () => {
     Alert.alert("Log out", "Are you sure you want to log out?", [
       { text: "Cancel", style: "cancel" },
       {
@@ -143,40 +213,17 @@ export default function SettingsScreen() {
         },
       },
     ]);
-  }
+  };
 
-  function openItem(label: string) {
-    switch (label) {
-      case "Institute profile":
-        router.push("/institute-profile");
-        break;
-
-      case "Classes":
-        router.push("/classes");
-        break;
-
-      case "Batches":
-        router.push("/batches");
-        break;
-
-      case "ID card settings":
-        router.push("/student-id-card-settings");
-        break;
-
-      default:
-        Alert.alert(
-          label,
-          `${label} screen will be implemented next.`
-        );
-    }
-  }
+  const openItem = (item: SettingsItem) => {
+    router.push(item.route as never);
+  };
 
   return (
     <View style={styles.screen}>
       <StatusBar
         barStyle="light-content"
         backgroundColor={NAVY}
-        translucent={false}
       />
 
       <InstituteHeader subtitle="Institute settings" />
@@ -189,7 +236,7 @@ export default function SettingsScreen() {
         <View style={styles.intro}>
           <Text style={styles.pageTitle}>Settings</Text>
           <Text style={styles.pageSubtitle}>
-            Manage {instituteName} and your app preferences.
+            Manage {instituteName} and its preferences.
           </Text>
         </View>
 
@@ -204,21 +251,21 @@ export default function SettingsScreen() {
                   styles.row,
                   index === group.items.length - 1 && styles.lastRow,
                 ]}
-                activeOpacity={0.7}
-                onPress={() => openItem(item.label)}
+                activeOpacity={0.75}
+                onPress={() => openItem(item)}
                 accessibilityRole="button"
                 accessibilityLabel={item.label}
               >
                 <View style={styles.rowIconBox}>
-                  <Feather name={item.icon} size={19} color={ICON} />
+                  <Feather name={item.icon} size={18} color={ICON} />
                 </View>
 
                 <Text style={styles.rowLabel}>{item.label}</Text>
 
                 <Feather
                   name="chevron-right"
-                  size={20}
-                  color="#C2D0DA"
+                  size={19}
+                  color="#B5C4CE"
                 />
               </TouchableOpacity>
             ))}
@@ -228,14 +275,14 @@ export default function SettingsScreen() {
         <TouchableOpacity
           style={styles.logoutRow}
           onPress={handleLogout}
-          activeOpacity={0.7}
+          activeOpacity={0.75}
           accessibilityRole="button"
           accessibilityLabel="Log out"
         >
-          <Feather name="log-out" size={21} color={RED} />
-          <Text style={styles.logoutLabel}>Logout</Text>
+          <Feather name="log-out" size={20} color={RED} />
+          <Text style={styles.logoutLabel}>Log out</Text>
           <View style={styles.logoutSpacer} />
-          <Feather name="chevron-right" size={20} color={RED} />
+          <Feather name="chevron-right" size={19} color={RED} />
         </TouchableOpacity>
 
         <Text style={styles.version}>
@@ -277,36 +324,36 @@ const styles = StyleSheet.create({
   },
   group: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 20,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: "#DFE7ED",
     overflow: "hidden",
-    marginBottom: 18,
+    marginBottom: 16,
   },
   groupTitle: {
     color: MUTED,
     fontSize: 11,
     fontWeight: "800",
     letterSpacing: 1,
-    paddingHorizontal: 18,
-    paddingTop: 17,
+    paddingHorizontal: 17,
+    paddingTop: 16,
     paddingBottom: 8,
   },
   row: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 58,
-    paddingHorizontal: 17,
+    minHeight: 56,
+    paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#DFE7ED",
+    borderBottomColor: "#E5EBF0",
   },
   lastRow: {
     borderBottomWidth: 0,
   },
   rowIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
+    width: 35,
+    height: 35,
+    borderRadius: 10,
     backgroundColor: "#F1F5F8",
     alignItems: "center",
     justifyContent: "center",
@@ -319,19 +366,19 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   logoutRow: {
-    minHeight: 60,
+    minHeight: 58,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     paddingHorizontal: 18,
     backgroundColor: "#FFFFFF",
-    borderRadius: 18,
+    borderRadius: 17,
     borderWidth: 1,
     borderColor: "#F0DADA",
   },
   logoutLabel: {
     color: RED,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "700",
   },
   logoutSpacer: {
@@ -341,6 +388,6 @@ const styles = StyleSheet.create({
     color: MUTED,
     fontSize: 11,
     textAlign: "center",
-    paddingVertical: 24,
+    paddingVertical: 22,
   },
 });

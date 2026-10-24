@@ -17,7 +17,7 @@ const GOLD = "#F3C969";
 const tabs = [
   { label: "Home", icon: "home", route: "/dashboard" },
   { label: "Students", icon: "users", route: "/students" },
-  { label: "Teacher", icon: "book-open", route: "/teachers" },
+  { label: "Teacher", icon: "book-open", route: "/teacher" },
   {
     label: "Attendance",
     icon: "calendar",

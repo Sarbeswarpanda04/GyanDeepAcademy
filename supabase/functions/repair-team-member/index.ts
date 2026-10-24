@@ -29,7 +29,7 @@ Deno.serve(async (req: Request) => {
     return json({ success: false, message: "Method not allowed." }, 405);
   }
 
-  let admin: ReturnType<typeof createClient> | null = null;
+let admin: ReturnType<typeof createClient<any>> | null = null;
   let newlyCreatedAuthId: string | null = null;
 
   try {
@@ -42,7 +42,7 @@ Deno.serve(async (req: Request) => {
       return json({ success: false, message: "Login or server configuration is missing." }, 401);
     }
 
-    const callerClient = createClient(url, anonKey, {
+    const callerClient = createClient<any>(url, anonKey, {
       global: { headers: { Authorization: authorization } },
       auth: { persistSession: false, autoRefreshToken: false },
     });
@@ -54,7 +54,7 @@ Deno.serve(async (req: Request) => {
       return json({ success: false, message: "Please sign in again." }, 401);
     }
 
-    admin = createClient(url, serviceKey, {
+    admin = createClient<any>(url, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 

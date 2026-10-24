@@ -322,13 +322,15 @@ export default function StudentIdCardScreen() {
                 .from("institute_student_batches")
                 .select("batch_id")
                 .eq("student_id", studentRecord.id),
+
               supabase
                 .from("institutes")
                 .select(
-                  "name,slogan,address,contact_phone,logo_url,signature_url",
+                  "name,slogan,address,contact_phone,logo_url,signature_url,email",
                 )
                 .eq("id", studentRecord.institute_id)
                 .maybeSingle(),
+
               loadStudentIdCardSettings(studentRecord.institute_id),
             ]);
 
@@ -827,7 +829,7 @@ export default function StudentIdCardScreen() {
           >
             <View style={styles.footerMain}>
               <Text style={styles.footerContact} numberOfLines={1}>
-                INSTITUTE EMAIL: {institute.email}
+                INSTITUTE EMAIL: {institute?.email ?? ""}
               </Text>
 
               <Text

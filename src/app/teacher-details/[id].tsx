@@ -1,4 +1,3 @@
-
 import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -15,11 +14,7 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import {
-  router,
-  useFocusEffect,
-  useLocalSearchParams,
-} from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { supabase } from "../../lib/supabase";
 import AppAlert, { AppAlertType } from "../../components/AppAlert";
@@ -36,7 +31,12 @@ type Session = "morning" | "evening" | "batch";
 
 type AssignedClass = { id: string; name: string };
 type AssignedSubject = { id: string; name: string; class_id: string };
-type SubjectAssignment = { id: string; class_id: string; subject_id: string; teacher_id: string };
+type SubjectAssignment = {
+  id: string;
+  class_id: string;
+  subject_id: string;
+  teacher_id: string;
+};
 
 type Staff = {
   id: string;
@@ -71,6 +71,7 @@ type Payout = {
   period_end: string;
   note: string | null;
   payment_method?: "cash" | "upi" | "bank" | null;
+  proof_image_path?: string | null;
 };
 
 const money = (amount: number) =>
@@ -80,7 +81,7 @@ const money = (amount: number) =>
 
 const iso = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
-    date.getDate()
+    date.getDate(),
   ).padStart(2, "0")}`;
 
 const monthLabel = (date: Date) =>
@@ -148,24 +149,30 @@ export default function TeacherDetailsScreen() {
 
   const [staff, setStaff] = useState<Staff | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-  const [attendance, setAttendance] = useState<
-    Record<string, AttendanceRow>
-  >({});
+  const [attendance, setAttendance] = useState<Record<string, AttendanceRow>>(
+    {},
+  );
   const [payouts, setPayouts] = useState<Payout[]>([]);
+  const [proofUrls, setProofUrls] = useState<Record<string, string>>({});
+  const [proofPreviewUrl, setProofPreviewUrl] = useState<string | null>(null);
   const [assignedClasses, setAssignedClasses] = useState<AssignedClass[]>([]);
-  const [assignedSubjects, setAssignedSubjects] = useState<AssignedSubject[]>([]);
-  const [subjectAssignments, setSubjectAssignments] = useState<SubjectAssignment[]>([]);
+  const [assignedSubjects, setAssignedSubjects] = useState<AssignedSubject[]>(
+    [],
+  );
+  const [subjectAssignments, setSubjectAssignments] = useState<
+    SubjectAssignment[]
+  >([]);
   const [month, setMonth] = useState(
-    () => new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+    () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   );
   const [yearPicker, setYearPicker] = useState(false);
   const [loading, setLoading] = useState(true);
   const [autoCalculate, setAutoCalculate] = useState(true);
   const [manualAmount, setManualAmount] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
-  const [statusChoice, setStatusChoice] = useState<
-    "absent" | "holiday" | null
-  >(null);
+  const [statusChoice, setStatusChoice] = useState<"absent" | "holiday" | null>(
+    null,
+  );
   const [sessionChoices, setSessionChoices] = useState<Session[]>([]);
   const [attendanceSheet, setAttendanceSheet] = useState(false);
   const [deleteSheet, setDeleteSheet] = useState(false);
@@ -191,7 +198,7 @@ export default function TeacherDetailsScreen() {
     title: string,
     message: string,
     type: AppAlertType = "info",
-    onConfirm?: () => void
+    onConfirm?: () => void,
   ) => {
     setAlert({
       visible: true,
@@ -240,7 +247,7 @@ export default function TeacherDetailsScreen() {
       const { data: person, error: staffError } = await supabase
         .from("institute_staff")
         .select(
-          "id,institute_id,full_name,phone,photo_path,staff_type,salary_type,salary_amount,date_of_birth,weekly_holidays,status"
+          "id,institute_id,full_name,phone,photo_path,staff_type,salary_type,salary_amount,date_of_birth,weekly_holidays,status",
         )
         .eq("id", staffId)
         .eq("institute_id", membership.institute_id)
@@ -251,23 +258,24 @@ export default function TeacherDetailsScreen() {
       setStaff(person as Staff);
 
       // Load this teacher's assigned subjects, grouped by class.
-      const [classesResult, subjectsResult, assignmentsResult] = await Promise.all([
-        supabase
-          .from("institute_classes")
-          .select("id,name")
-          .eq("institute_id", membership.institute_id)
-          .order("name"),
-        supabase
-          .from("institute_subjects")
-          .select("id,name,class_id")
-          .eq("institute_id", membership.institute_id)
-          .order("name"),
-        supabase
-          .from("institute_subject_teachers")
-          .select("id,class_id,subject_id,teacher_id")
-          .eq("institute_id", membership.institute_id)
-          .eq("teacher_id", staffId),
-      ]);
+      const [classesResult, subjectsResult, assignmentsResult] =
+        await Promise.all([
+          supabase
+            .from("institute_classes")
+            .select("id,name")
+            .eq("institute_id", membership.institute_id)
+            .order("name"),
+          supabase
+            .from("institute_subjects")
+            .select("id,name,class_id")
+            .eq("institute_id", membership.institute_id)
+            .order("name"),
+          supabase
+            .from("institute_subject_teachers")
+            .select("id,class_id,subject_id,teacher_id")
+            .eq("institute_id", membership.institute_id)
+            .eq("teacher_id", staffId),
+        ]);
 
       if (classesResult.error) throw classesResult.error;
       if (subjectsResult.error) throw subjectsResult.error;
@@ -275,7 +283,9 @@ export default function TeacherDetailsScreen() {
 
       setAssignedClasses((classesResult.data ?? []) as AssignedClass[]);
       setAssignedSubjects((subjectsResult.data ?? []) as AssignedSubject[]);
-      setSubjectAssignments((assignmentsResult.data ?? []) as SubjectAssignment[]);
+      setSubjectAssignments(
+        (assignmentsResult.data ?? []) as SubjectAssignment[],
+      );
 
       if (person.photo_path) {
         const { data: signed, error: photoError } = await supabase.storage
@@ -283,7 +293,10 @@ export default function TeacherDetailsScreen() {
           .createSignedUrl(person.photo_path, 3600);
 
         if (photoError) {
-          console.warn("Teacher photo could not be loaded:", photoError.message);
+          console.warn(
+            "Teacher photo could not be loaded:",
+            photoError.message,
+          );
         }
 
         setPhotoUrl(signed?.signedUrl ?? null);
@@ -291,17 +304,13 @@ export default function TeacherDetailsScreen() {
         setPhotoUrl(null);
       }
 
-      const start = iso(
-        new Date(month.getFullYear(), month.getMonth(), 1)
-      );
-      const end = iso(
-        new Date(month.getFullYear(), month.getMonth() + 1, 0)
-      );
+      const start = iso(new Date(month.getFullYear(), month.getMonth(), 1));
+      const end = iso(new Date(month.getFullYear(), month.getMonth() + 1, 0));
 
       const { data: attendanceRows, error: attendanceError } = await supabase
         .from("staff_attendance")
         .select(
-          "id,staff_id,institute_id,attendance_date,status,sessions,wage_amount,note"
+          "id,staff_id,institute_id,attendance_date,status,sessions,wage_amount,note",
         )
         .eq("staff_id", staffId)
         .eq("institute_id", membership.institute_id)
@@ -323,7 +332,9 @@ export default function TeacherDetailsScreen() {
 
       const { data: payoutRows, error: payoutError } = await supabase
         .from("staff_payouts")
-        .select("id,amount,paid_date,period_start,period_end,note,payment_method")
+        .select(
+          "id,amount,paid_date,period_start,period_end,note,payment_method,proof_image_path",
+        )
         .eq("staff_id", staffId)
         .eq("institute_id", membership.institute_id)
         .order("paid_date", { ascending: false })
@@ -331,12 +342,38 @@ export default function TeacherDetailsScreen() {
 
       if (payoutError) throw payoutError;
 
-      setPayouts((payoutRows ?? []) as Payout[]);
+      const loadedPayouts = (payoutRows ?? []) as Payout[];
+      setPayouts(loadedPayouts);
+
+      // Proof images are stored in a private bucket, so create short-lived signed URLs.
+      const proofEntries = await Promise.all(
+        loadedPayouts
+          .filter((payout) => payout.proof_image_path)
+          .map(async (payout) => {
+            const { data: signed, error: signedError } = await supabase.storage
+              .from("staff-salary-proofs")
+              .createSignedUrl(payout.proof_image_path!, 3600);
+
+            if (signedError) {
+              console.warn(
+                `Payment proof could not be loaded for payout ${payout.id}:`,
+                signedError.message,
+              );
+              return [payout.id, ""] as const;
+            }
+
+            return [payout.id, signed?.signedUrl ?? ""] as const;
+          }),
+      );
+
+      setProofUrls(
+        Object.fromEntries(proofEntries.filter((entry) => Boolean(entry[1]))),
+      );
     } catch (error: any) {
       showAlert(
         "Unable to load teacher",
         error?.message ?? "Please try again.",
-        "error"
+        "error",
       );
     } finally {
       setLoading(false);
@@ -345,17 +382,18 @@ export default function TeacherDetailsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      // Keep the teacher profile mounted while changing month/year.
-      // Only the attendance and payout queries are refreshed by load().
-      if (!staff) setLoading(true);
+      // Load once when this screen gains focus. Do not depend on `staff` here:
+      // load() updates staff state, and including staff in these dependencies
+      // causes the effect to run again, repeatedly refreshing the signed photo
+      // URL and making the teacher image flicker/disappear.
       void load();
-    }, [load, staff])
+    }, [load]),
   );
 
   const daysInMonth = new Date(
     month.getFullYear(),
     month.getMonth() + 1,
-    0
+    0,
   ).getDate();
 
   const offset =
@@ -363,36 +401,33 @@ export default function TeacherDetailsScreen() {
 
   const dates = useMemo(
     () =>
-      Array.from(
-        { length: offset + daysInMonth },
-        (_, index) => (index < offset ? null : index - offset + 1)
+      Array.from({ length: offset + daysInMonth }, (_, index) =>
+        index < offset ? null : index - offset + 1,
       ),
-    [offset, daysInMonth]
+    [offset, daysInMonth],
   );
 
   const isWeeklyHoliday = (date: Date) =>
     (staff?.weekly_holidays ?? []).some(
       (day) =>
         day.toLowerCase() ===
-        ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][date.getDay()]
+        ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][date.getDay()],
     );
 
   const monthRows = Object.values(attendance);
 
   const presentCount = monthRows.filter(
-    (row) => row.status === "present" && (row.sessions ?? []).length > 0
+    (row) => row.status === "present" && (row.sessions ?? []).length > 0,
   ).length;
 
-  const absentCount = monthRows.filter(
-    (row) => row.status === "absent"
-  ).length;
+  const absentCount = monthRows.filter((row) => row.status === "absent").length;
 
   const holidayCount = monthRows.filter(
-    (row) => row.status === "holiday"
+    (row) => row.status === "holiday",
   ).length;
 
   const paidDays = monthRows.filter(
-    (row) => row.status === "present" && (row.sessions ?? []).length > 0
+    (row) => row.status === "present" && (row.sessions ?? []).length > 0,
   ).length;
 
   const calculatedAmount = useMemo(() => {
@@ -414,8 +449,7 @@ export default function TeacherDetailsScreen() {
       }
 
       return (
-        total +
-        (daysInMonth ? Number(staff.salary_amount) / daysInMonth : 0)
+        total + (daysInMonth ? Number(staff.salary_amount) / daysInMonth : 0)
       );
     }, 0);
   }, [staff, attendance, daysInMonth]);
@@ -444,7 +478,7 @@ export default function TeacherDetailsScreen() {
     setSessionChoices((current) =>
       current.includes(session)
         ? current.filter((item) => item !== session)
-        : [...current, session]
+        : [...current, session],
     );
   };
 
@@ -461,7 +495,7 @@ export default function TeacherDetailsScreen() {
       showAlert(
         "Select attendance",
         "Choose Absent, Holiday, or at least one session.",
-        "warning"
+        "warning",
       );
       return;
     }
@@ -481,8 +515,7 @@ export default function TeacherDetailsScreen() {
           ? statusChoice
           : "present";
 
-      const sessions: Session[] =
-        status === "present" ? sessionChoices : [];
+      const sessions: Session[] = status === "present" ? sessionChoices : [];
 
       let wage = 0;
 
@@ -512,7 +545,7 @@ export default function TeacherDetailsScreen() {
           onConflict: "staff_id,attendance_date",
         })
         .select(
-          "id,staff_id,institute_id,attendance_date,status,sessions,wage_amount,note"
+          "id,staff_id,institute_id,attendance_date,status,sessions,wage_amount,note",
         )
         .single();
 
@@ -533,9 +566,7 @@ export default function TeacherDetailsScreen() {
           ? status === "absent"
             ? "Absent"
             : "Holiday"
-          : sessions
-              .map((session) => SESSION_THEME[session].label)
-              .join(" + ");
+          : sessions.map((session) => SESSION_THEME[session].label).join(" + ");
 
       showAlert(
         "Attendance saved",
@@ -544,13 +575,13 @@ export default function TeacherDetailsScreen() {
             ? `${money(wage)} wage recorded.`
             : "No wages will be counted for this status."
         }`,
-        "success"
+        "success",
       );
     } catch (error: any) {
       showAlert(
         "Could not save attendance",
         error?.message ?? "Please try again.",
-        "error"
+        "error",
       );
     } finally {
       setSavingAttendance(false);
@@ -606,16 +637,22 @@ export default function TeacherDetailsScreen() {
             .eq("id", payout.id)
             .eq("staff_id", staffId);
           if (error) throw error;
-          setPayouts((current) => current.filter((item) => item.id !== payout.id));
-          showAlert("Payout deleted", "The payout record was deleted.", "success");
+          setPayouts((current) =>
+            current.filter((item) => item.id !== payout.id),
+          );
+          showAlert(
+            "Payout deleted",
+            "The payout record was deleted.",
+            "success",
+          );
         } catch (error: any) {
           showAlert(
             "Could not delete payout",
             error?.message ?? "Please check your permissions and try again.",
-            "error"
+            "error",
           );
         }
-      }
+      },
     );
   };
 
@@ -645,15 +682,18 @@ export default function TeacherDetailsScreen() {
       }
 
       setDeleteSheet(false);
-      showAlert("Teacher deleted", "The teacher has been removed.", "success", () =>
-        router.replace("/teacher" as never),
+      showAlert(
+        "Teacher deleted",
+        "The teacher has been removed.",
+        "success",
+        () => router.replace("/teacher" as never),
       );
     } catch (error: any) {
       setDeleteSheet(false);
       showAlert(
         "Could not delete teacher",
         error?.message ?? "Please try again.",
-        "error"
+        "error",
       );
     }
   };
@@ -672,12 +712,12 @@ export default function TeacherDetailsScreen() {
   const monthPayouts = payouts.filter(
     (payout) =>
       payout.period_start ===
-      iso(new Date(month.getFullYear(), month.getMonth(), 1))
+      iso(new Date(month.getFullYear(), month.getMonth(), 1)),
   );
 
   const totalPaid = monthPayouts.reduce(
     (total, payout) => total + Number(payout.amount),
-    0
+    0,
   );
 
   return (
@@ -688,15 +728,9 @@ export default function TeacherDetailsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.page}
       >
-        <LinearGradient
-          colors={[NAVY, "#192638"]}
-          style={styles.hero}
-        >
+        <LinearGradient colors={[NAVY, "#192638"]} style={styles.hero}>
           <View style={styles.toolbar}>
-            <Pressable
-              style={styles.iconButton}
-              onPress={() => router.back()}
-            >
+            <Pressable style={styles.iconButton} onPress={() => router.back()}>
               <Feather name="arrow-left" size={28} color={WHITE} />
             </Pressable>
 
@@ -707,7 +741,7 @@ export default function TeacherDetailsScreen() {
                   showAlert(
                     "Export attendance",
                     "Connect your PDF export workflow here to download attendance.",
-                    "info"
+                    "info",
                   )
                 }
               >
@@ -760,11 +794,15 @@ export default function TeacherDetailsScreen() {
               style={styles.whatsapp}
               onPress={() => {
                 if (!staff.phone) {
-                  showAlert("No phone number", "Add a phone number first.", "warning");
+                  showAlert(
+                    "No phone number",
+                    "Add a phone number first.",
+                    "warning",
+                  );
                   return;
                 }
                 void Linking.openURL(
-                  `https://wa.me/91${staff.phone.replace(/\D/g, "")}`
+                  `https://wa.me/91${staff.phone.replace(/\D/g, "")}`,
                 );
               }}
             >
@@ -778,7 +816,11 @@ export default function TeacherDetailsScreen() {
                 if (staff.phone) {
                   void Linking.openURL(`tel:${staff.phone}`);
                 } else {
-                  showAlert("No phone number", "Add a phone number first.", "warning");
+                  showAlert(
+                    "No phone number",
+                    "Add a phone number first.",
+                    "warning",
+                  );
                 }
               }}
             >
@@ -795,29 +837,40 @@ export default function TeacherDetailsScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.assignedHeading}>Assigned Subjects</Text>
-              <Text style={styles.assignedSubheading}>Class-wise teaching assignments</Text>
+              <Text style={styles.assignedSubheading}>
+                Class-wise teaching assignments
+              </Text>
             </View>
             <View style={styles.assignmentCount}>
-              <Text style={styles.assignmentCountText}>{subjectAssignments.length}</Text>
+              <Text style={styles.assignmentCountText}>
+                {subjectAssignments.length}
+              </Text>
             </View>
           </View>
 
           {subjectAssignments.length === 0 ? (
             <View style={styles.noAssignedSubjects}>
               <Feather name="book" size={20} color="#879AAA" />
-              <Text style={styles.noAssignedSubjectsText}>No subjects assigned to this teacher yet.</Text>
+              <Text style={styles.noAssignedSubjectsText}>
+                No subjects assigned to this teacher yet.
+              </Text>
             </View>
           ) : (
             assignedClasses
               .filter((classItem) =>
-                subjectAssignments.some((assignment) => assignment.class_id === classItem.id)
+                subjectAssignments.some(
+                  (assignment) => assignment.class_id === classItem.id,
+                ),
               )
               .map((classItem) => {
-                const classSubjects = assignedSubjects.filter((subject) =>
-                  subject.class_id === classItem.id &&
-                  subjectAssignments.some((assignment) =>
-                    assignment.class_id === classItem.id && assignment.subject_id === subject.id
-                  )
+                const classSubjects = assignedSubjects.filter(
+                  (subject) =>
+                    subject.class_id === classItem.id &&
+                    subjectAssignments.some(
+                      (assignment) =>
+                        assignment.class_id === classItem.id &&
+                        assignment.subject_id === subject.id,
+                    ),
                 );
 
                 if (classSubjects.length === 0) return null;
@@ -829,17 +882,26 @@ export default function TeacherDetailsScreen() {
                         <Feather name="layers" size={17} color={WHITE} />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.assignedClassName}>{classItem.name}</Text>
+                        <Text style={styles.assignedClassName}>
+                          {classItem.name}
+                        </Text>
                         <Text style={styles.assignedClassMeta}>
-                          {classSubjects.length} {classSubjects.length === 1 ? "subject" : "subjects"} assigned
+                          {classSubjects.length}{" "}
+                          {classSubjects.length === 1 ? "subject" : "subjects"}{" "}
+                          assigned
                         </Text>
                       </View>
                     </View>
 
                     <View style={styles.assignedSubjectList}>
                       {classSubjects.map((subject) => (
-                        <View key={subject.id} style={styles.assignedSubjectCard}>
-                          <Text style={styles.assignedSubjectName}>{subject.name}</Text>
+                        <View
+                          key={subject.id}
+                          style={styles.assignedSubjectCard}
+                        >
+                          <Text style={styles.assignedSubjectName}>
+                            {subject.name}
+                          </Text>
                         </View>
                       ))}
                     </View>
@@ -857,8 +919,8 @@ export default function TeacherDetailsScreen() {
               {staff.salary_type === "monthly"
                 ? "month"
                 : staff.salary_type === "daily"
-                ? "day"
-                : "batch"}
+                  ? "day"
+                  : "batch"}
             </Text>
           </View>
 
@@ -871,8 +933,8 @@ export default function TeacherDetailsScreen() {
                 {staff.salary_type === "batch"
                   ? "Batch rate × selected sessions"
                   : staff.salary_type === "daily"
-                  ? "Daily wage × paid days"
-                  : "Monthly salary prorated by calendar days"}
+                    ? "Daily wage × paid days"
+                    : "Monthly salary prorated by calendar days"}
               </Text>
             </View>
             <Switch
@@ -889,30 +951,30 @@ export default function TeacherDetailsScreen() {
             <Pressable
               style={styles.monthArrow}
               onPress={() =>
-                setMonth(
-                  new Date(month.getFullYear(), month.getMonth() - 1, 1)
-                )
+                setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))
               }
             >
               <Feather name="chevron-left" size={23} color={MUTED} />
             </Pressable>
 
             <View style={styles.monthTitleWrap}>
-              <Pressable onPress={() => setYearPicker(true)} style={styles.yearTitleButton}>
+              <Pressable
+                onPress={() => setYearPicker(true)}
+                style={styles.yearTitleButton}
+              >
                 <Text style={styles.monthTitle}>{monthLabel(month)}</Text>
                 <Feather name="chevron-down" size={17} color={NAVY} />
               </Pressable>
               <Text style={styles.monthSub}>
-                {presentCount} present · {absentCount} absent · {holidayCount} holiday
+                {presentCount} present · {absentCount} absent · {holidayCount}{" "}
+                holiday
               </Text>
             </View>
 
             <Pressable
               style={styles.monthArrow}
               onPress={() =>
-                setMonth(
-                  new Date(month.getFullYear(), month.getMonth() + 1, 1)
-                )
+                setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))
               }
             >
               <Feather name="chevron-right" size={23} color={MUTED} />
@@ -932,15 +994,13 @@ export default function TeacherDetailsScreen() {
               }
 
               const date = iso(
-                new Date(month.getFullYear(), month.getMonth(), day)
+                new Date(month.getFullYear(), month.getMonth(), day),
               );
 
               const row = attendance[date];
               const sessions = row?.sessions ?? [];
               const future = date > iso(new Date());
-              const weeklyOff = isWeeklyHoliday(
-                new Date(`${date}T12:00:00`)
-              );
+              const weeklyOff = isWeeklyHoliday(new Date(`${date}T12:00:00`));
 
               const absent = row?.status === "absent";
               const holiday = row?.status === "holiday";
@@ -974,10 +1034,10 @@ export default function TeacherDetailsScreen() {
                           borderColor: theme.border,
                         }
                       : bothSessions
-                      ? styles.bothSessionsDay
-                      : weeklyOff
-                      ? styles.offDay
-                      : null,
+                        ? styles.bothSessionsDay
+                        : weeklyOff
+                          ? styles.offDay
+                          : null,
                     date === iso(new Date()) && styles.today,
                     future && styles.futureDay,
                   ]}
@@ -1073,9 +1133,7 @@ export default function TeacherDetailsScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>
-            {monthLabel(month)} salary
-          </Text>
+          <Text style={styles.sectionTitle}>{monthLabel(month)} salary</Text>
 
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Present days</Text>
@@ -1101,13 +1159,19 @@ export default function TeacherDetailsScreen() {
           <View style={styles.payableRow}>
             <Text style={styles.payableLabel}>Payable · {paidDays} days</Text>
             <Text style={styles.payableAmount}>
-              {money(autoCalculate ? Math.max(0, calculatedAmount - totalPaid) : Number(manualAmount || 0))}
+              {money(
+                autoCalculate
+                  ? Math.max(0, calculatedAmount - totalPaid)
+                  : Number(manualAmount || 0),
+              )}
             </Text>
           </View>
 
           {!autoCalculate && (
             <View style={styles.manualAmountWrap}>
-              <Text style={styles.manualAmountLabel}>Manual payout amount (₹)</Text>
+              <Text style={styles.manualAmountLabel}>
+                Manual payout amount (₹)
+              </Text>
               <TextInput
                 value={manualAmount}
                 onChangeText={setManualAmount}
@@ -1121,10 +1185,7 @@ export default function TeacherDetailsScreen() {
 
           <Pressable
             disabled={savingPayout}
-            style={[
-              styles.primaryButton,
-              savingPayout && { opacity: 0.6 },
-            ]}
+            style={[styles.primaryButton, savingPayout && { opacity: 0.6 }]}
             onPress={() => void recordPayout()}
           >
             {savingPayout ? (
@@ -1153,6 +1214,31 @@ export default function TeacherDetailsScreen() {
                   {!!payout.note && (
                     <Text style={styles.muted}>{payout.note}</Text>
                   )}
+                  {payout.proof_image_path ? (
+                    proofUrls[payout.id] ? (
+                      <Pressable
+                        style={styles.proofHistoryButton}
+                        onPress={() => setProofPreviewUrl(proofUrls[payout.id])}
+                        accessibilityLabel="View payment proof"
+                      >
+                        <Image
+                          source={{ uri: proofUrls[payout.id] }}
+                          style={styles.proofHistoryThumbnail}
+                          resizeMode="cover"
+                        />
+                        <View style={styles.proofHistoryTextWrap}>
+                          <Feather name="image" size={15} color="#2456A6" />
+                          <Text style={styles.proofHistoryText}>
+                            View payment proof
+                          </Text>
+                        </View>
+                      </Pressable>
+                    ) : (
+                      <Text style={styles.proofHistoryUnavailable}>
+                        Payment proof attached
+                      </Text>
+                    )
+                  ) : null}
                 </View>
                 <View style={styles.payoutRight}>
                   <Text style={styles.payoutAmount}>
@@ -1184,6 +1270,38 @@ export default function TeacherDetailsScreen() {
         </View>
       </ScrollView>
 
+      {/* Full-size payment proof preview */}
+      <Modal
+        visible={Boolean(proofPreviewUrl)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setProofPreviewUrl(null)}
+      >
+        <View style={styles.proofPreviewOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setProofPreviewUrl(null)}
+          />
+          <View style={styles.proofPreviewModal}>
+            <Pressable
+              style={styles.proofPreviewClose}
+              onPress={() => setProofPreviewUrl(null)}
+              accessibilityLabel="Close payment proof"
+            >
+              <Feather name="x" size={22} color={WHITE} />
+            </Pressable>
+            {proofPreviewUrl ? (
+              <Image
+                source={{ uri: proofPreviewUrl }}
+                style={styles.proofPreviewFullImage}
+                resizeMode="contain"
+              />
+            ) : null}
+            <Text style={styles.proofPreviewCaption}>Payment proof</Text>
+          </View>
+        </View>
+      </Modal>
+
       {/* Year picker bottom sheet */}
       <Modal
         visible={yearPicker}
@@ -1192,29 +1310,53 @@ export default function TeacherDetailsScreen() {
         onRequestClose={() => setYearPicker(false)}
       >
         <View style={styles.sheetOverlay}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setYearPicker(false)} />
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setYearPicker(false)}
+          />
           <View style={styles.yearSheet}>
             <View style={styles.sheetHandle} />
             <Text style={styles.sheetTitle}>Choose year</Text>
-            <Text style={styles.sheetSubtitle}>Select a year for the attendance calendar.</Text>
-            <ScrollView style={{ maxHeight: 330 }} showsVerticalScrollIndicator={false}>
-              {Array.from({ length: 21 }, (_, index) => new Date().getFullYear() - 10 + index).map((year) => (
+            <Text style={styles.sheetSubtitle}>
+              Select a year for the attendance calendar.
+            </Text>
+            <ScrollView
+              style={{ maxHeight: 330 }}
+              showsVerticalScrollIndicator={false}
+            >
+              {Array.from(
+                { length: 21 },
+                (_, index) => new Date().getFullYear() - 10 + index,
+              ).map((year) => (
                 <Pressable
                   key={year}
                   onPress={() => {
                     setMonth(new Date(year, month.getMonth(), 1));
                     setYearPicker(false);
                   }}
-                  style={[styles.yearOption, month.getFullYear() === year && styles.yearOptionActive]}
+                  style={[
+                    styles.yearOption,
+                    month.getFullYear() === year && styles.yearOptionActive,
+                  ]}
                 >
-                  <Text style={[styles.yearOptionText, month.getFullYear() === year && { color: WHITE }]}>
+                  <Text
+                    style={[
+                      styles.yearOptionText,
+                      month.getFullYear() === year && { color: WHITE },
+                    ]}
+                  >
                     {year}
                   </Text>
-                  {month.getFullYear() === year && <Feather name="check" size={18} color={WHITE} />}
+                  {month.getFullYear() === year && (
+                    <Feather name="check" size={18} color={WHITE} />
+                  )}
                 </Pressable>
               ))}
             </ScrollView>
-            <Pressable style={styles.cancelButton} onPress={() => setYearPicker(false)}>
+            <Pressable
+              style={styles.cancelButton}
+              onPress={() => setYearPicker(false)}
+            >
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </Pressable>
           </View>
@@ -1253,10 +1395,10 @@ export default function TeacherDetailsScreen() {
               {statusChoice
                 ? titleCase(statusChoice)
                 : sessionChoices.length
-                ? sessionChoices
-                    .map((session) => SESSION_THEME[session].label)
-                    .join(" + ")
-                : "Not marked"}
+                  ? sessionChoices
+                      .map((session) => SESSION_THEME[session].label)
+                      .join(" + ")
+                  : "Not marked"}
             </Text>
 
             <Text style={styles.sectionTitle}>Attendance status</Text>
@@ -1299,60 +1441,58 @@ export default function TeacherDetailsScreen() {
             </Text>
 
             <View style={styles.choiceRow}>
-              {(["morning", "evening", "batch"] as Session[]).map(
-                (session) => {
-                  const selected = sessionChoices.includes(session);
-                  const theme = SESSION_THEME[session];
+              {(["morning", "evening", "batch"] as Session[]).map((session) => {
+                const selected = sessionChoices.includes(session);
+                const theme = SESSION_THEME[session];
 
-                  return (
-                    <Pressable
-                      key={session}
-                      onPress={() => toggleSession(session)}
+                return (
+                  <Pressable
+                    key={session}
+                    onPress={() => toggleSession(session)}
+                    style={[
+                      styles.choice,
+                      selected && {
+                        backgroundColor: theme.bg,
+                        borderColor: theme.border,
+                      },
+                    ]}
+                  >
+                    <View
                       style={[
-                        styles.choice,
-                        selected && {
-                          backgroundColor: theme.bg,
-                          borderColor: theme.border,
-                        },
+                        styles.choiceDot,
+                        { backgroundColor: theme.border },
+                      ]}
+                    />
+                    <Text
+                      style={[
+                        styles.choiceText,
+                        selected && { color: theme.color },
                       ]}
                     >
-                      <View
-                        style={[
-                          styles.choiceDot,
-                          { backgroundColor: theme.border },
-                        ]}
-                      />
-                      <Text
-                        style={[
-                          styles.choiceText,
-                          selected && { color: theme.color },
-                        ]}
-                      >
-                        {theme.label}
-                        {selected ? " ✓" : ""}
-                      </Text>
-                    </Pressable>
-                  );
-                }
-              )}
+                      {theme.label}
+                      {selected ? " ✓" : ""}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
 
             <Text style={styles.sheetNote}>
               {statusChoice === "absent" || statusChoice === "holiday"
                 ? "Wage for this date: ₹0"
                 : staff.salary_type === "batch"
-                ? `Estimated wage: ${money(
-                    sessionChoices.length * Number(staff.salary_amount)
-                  )} (${sessionChoices.length} selected session(s) × batch rate)`
-                : staff.salary_type === "daily"
-                ? `Estimated daily wage: ${money(
-                    sessionChoices.length ? Number(staff.salary_amount) : 0
-                  )}`
-                : `Estimated wage: ${money(
-                    sessionChoices.length
-                      ? Number(staff.salary_amount) / daysInMonth
-                      : 0
-                  )} (monthly salary prorated per calendar day)`}
+                  ? `Estimated wage: ${money(
+                      sessionChoices.length * Number(staff.salary_amount),
+                    )} (${sessionChoices.length} selected session(s) × batch rate)`
+                  : staff.salary_type === "daily"
+                    ? `Estimated daily wage: ${money(
+                        sessionChoices.length ? Number(staff.salary_amount) : 0,
+                      )}`
+                    : `Estimated wage: ${money(
+                        sessionChoices.length
+                          ? Number(staff.salary_amount) / daysInMonth
+                          : 0,
+                      )} (monthly salary prorated per calendar day)`}
             </Text>
 
             <Pressable
@@ -1393,9 +1533,7 @@ export default function TeacherDetailsScreen() {
               <Feather name="trash-2" size={26} color="#C62828" />
             </View>
 
-            <Text style={styles.deleteTitle}>
-              Delete {staff.full_name}?
-            </Text>
+            <Text style={styles.deleteTitle}>Delete {staff.full_name}?</Text>
 
             <Text style={styles.deleteMessage}>
               This removes the staff record. Related attendance and payout
@@ -1435,7 +1573,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 12,
   },
-  hero: { paddingHorizontal: 25, paddingTop: 35, paddingBottom: 15, borderBottomRightRadius: 20,  borderBottomLeftRadius: 20,},
+  hero: {
+    paddingHorizontal: 25,
+    paddingTop: 35,
+    paddingBottom: 15,
+    borderBottomRightRadius: 20,
+    borderBottomLeftRadius: 20,
+  },
   toolbar: {
     height: 48,
     flexDirection: "row",
@@ -1532,7 +1676,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
   },
-  noAssignedSubjectsText: { flex: 1, fontSize: 13, color: MUTED, lineHeight: 19 },
+  noAssignedSubjectsText: {
+    flex: 1,
+    fontSize: 13,
+    color: MUTED,
+    lineHeight: 19,
+  },
   assignedClassCard: {
     borderRadius: 16,
     borderWidth: 1,
@@ -1618,7 +1767,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   monthTitleWrap: { alignItems: "center", flex: 1 },
-  yearTitleButton: { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 5, paddingHorizontal: 8 },
+  yearTitleButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+  },
   monthTitle: { fontSize: 18, fontWeight: "800", color: NAVY },
   monthSub: { fontSize: 13, color: "#8A9CAB", marginTop: 3 },
   calendarGrid: { flexDirection: "row", flexWrap: "wrap" },
@@ -1671,7 +1826,12 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   legendText: { fontSize: 12, color: MUTED },
-  calendarHint: { fontSize: 12, color: "#879AAA", marginTop: 12, lineHeight: 18 },
+  calendarHint: {
+    fontSize: 12,
+    color: "#879AAA",
+    marginTop: 12,
+    lineHeight: 18,
+  },
   sectionTitle: {
     fontSize: 19,
     fontWeight: "700",
@@ -1727,10 +1887,92 @@ const styles = StyleSheet.create({
   payoutAmount: { fontSize: 16, fontWeight: "800", color: NAVY },
   payoutRight: { alignItems: "flex-end", gap: 6 },
   payoutActions: { flexDirection: "row", gap: 7 },
-  payoutAction: { width: 32, height: 32, borderRadius: 10, backgroundColor: "#F1F5F8", alignItems: "center", justifyContent: "center" },
-  payoutMethod: { fontSize: 10, fontWeight: "800", color: MUTED, letterSpacing: 0.5 },
-  yearSheet: { backgroundColor: WHITE, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 28 },
-  yearOption: { minHeight: 48, borderRadius: 13, marginTop: 7, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#F1F5F8" },
+  payoutAction: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: "#F1F5F8",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  payoutMethod: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: MUTED,
+    letterSpacing: 0.5,
+  },
+  proofHistoryButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    marginTop: 9,
+    padding: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#D6E4F4",
+    backgroundColor: "#F4F8FD",
+    alignSelf: "flex-start",
+  },
+  proofHistoryThumbnail: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: "#E7EDF3",
+  },
+  proofHistoryTextWrap: { flexDirection: "row", alignItems: "center", gap: 5 },
+  proofHistoryText: { fontSize: 12, fontWeight: "800", color: "#2456A6" },
+  proofHistoryUnavailable: { fontSize: 12, color: MUTED, marginTop: 8 },
+  proofPreviewOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(10,20,32,0.82)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 18,
+  },
+  proofPreviewModal: {
+    width: "100%",
+    height: "78%",
+    backgroundColor: "#152335",
+    borderRadius: 18,
+    padding: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  proofPreviewClose: {
+    alignSelf: "flex-end",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#31475C",
+    marginBottom: 8,
+  },
+  proofPreviewFullImage: { width: "100%", flex: 1 },
+  proofPreviewCaption: {
+    color: WHITE,
+    fontSize: 14,
+    fontWeight: "700",
+    paddingTop: 10,
+  },
+  yearSheet: {
+    backgroundColor: WHITE,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 28,
+  },
+  yearOption: {
+    minHeight: 48,
+    borderRadius: 13,
+    marginTop: 7,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F1F5F8",
+  },
   yearOptionActive: { backgroundColor: NAVY },
   yearOptionText: { fontSize: 16, fontWeight: "700", color: NAVY },
   sheetOverlay: {
@@ -1766,7 +2008,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   sheetTitle: { fontSize: 24, fontWeight: "900", color: NAVY },
-  sheetSubtitle: { fontSize: 15, color: MUTED, marginTop: 12, marginBottom: 22 },
+  sheetSubtitle: {
+    fontSize: 15,
+    color: MUTED,
+    marginTop: 12,
+    marginBottom: 22,
+  },
   choiceRow: { flexDirection: "row", flexWrap: "wrap", gap: 9 },
   choice: {
     flexGrow: 1,

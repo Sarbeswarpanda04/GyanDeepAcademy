@@ -813,7 +813,7 @@ const styles = StyleSheet.create({
     backgroundColor: NAVY,
     flexDirection: "row",
     alignItems: "center",
-    paddingTop: "35",
+    paddingTop: 35,
     paddingHorizontal: 18,
     gap: 14,
   },
