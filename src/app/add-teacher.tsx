@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -21,10 +20,11 @@ import { router, useLocalSearchParams } from "expo-router";
 import { supabase } from "../lib/supabase";
 import AppAlert, { type AppAlertType } from "../components/AppAlert";
 
-const NAVY = "#202F42";
-const BG = "#F1F5F8";
-const MUTED = "#617789";
-const BORDER = "#DDE5EC";
+const NAVY = "#4C02F7";
+const PURPLE_DARK = "#351078";
+const BG = "#F5F3FF";
+const MUTED = "#706A85";
+const BORDER = "#E4DDF7";
 const WHITE = "#FFFFFF";
 
 const HOLIDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -92,13 +92,15 @@ export default function AddTeacherScreen() {
   const showAppAlert = (
     title: string,
     message?: string,
-    buttons?: Array<{ text?: string; onPress?: () => void; style?: string }>
+    buttons?: Array<{ text?: string; onPress?: () => void; style?: string }>,
   ) => {
     const confirm = buttons?.[0];
     const cancel = buttons?.[1];
     const normalizedTitle = title.toLowerCase();
     const type: AppAlertType =
-      /fail|error|unable|invalid|cannot|could not|permission required|not linked|expired/.test(normalizedTitle)
+      /fail|error|unable|invalid|cannot|could not|permission required|not linked|expired/.test(
+        normalizedTitle,
+      )
         ? "error"
         : /success|added|updated/.test(normalizedTitle)
           ? "success"
@@ -118,7 +120,8 @@ export default function AddTeacherScreen() {
     });
   };
 
-  const closeAppAlert = () => setAppAlert((current) => ({ ...current, visible: false }));
+  const closeAppAlert = () =>
+    setAppAlert((current) => ({ ...current, visible: false }));
 
   const [instituteId, setInstituteId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -135,8 +138,18 @@ export default function AddTeacherScreen() {
   const [weeklyHolidays, setWeeklyHolidays] = useState<string[]>(["Sun"]);
 
   const [dob, setDob] = useState("");
+  const [joiningDate, setJoiningDate] = useState("");
   const [dateOpen, setDateOpen] = useState(false);
+  const [calendarTarget, setCalendarTarget] = useState<"dob" | "joining">(
+    "dob",
+  );
   const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const [showYearPicker, setShowYearPicker] = useState(false);
+  const currentYear = new Date().getFullYear();
+  const yearOptions = Array.from(
+    { length: currentYear + 11 - 1900 },
+    (_, index) => currentYear + 10 - index,
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -174,7 +187,9 @@ export default function AddTeacherScreen() {
         if (teacherId) {
           const { data: person, error: personError } = await supabase
             .from("institute_staff")
-            .select("id,full_name,phone,photo_path,staff_type,salary_type,salary_amount,date_of_birth,weekly_holidays,status")
+            .select(
+              "id,full_name,phone,photo_path,staff_type,salary_type,salary_amount,date_of_birth,joining_date,weekly_holidays,status",
+            )
             .eq("id", teacherId)
             .eq("institute_id", activeInstituteId)
             .maybeSingle();
@@ -185,13 +200,21 @@ export default function AddTeacherScreen() {
 
           setName(person.full_name ?? "");
           setPhone(person.phone ?? "");
-          setStaffType((person.staff_type ?? "teacher").toLowerCase().replace(/^\w/, (letter: string) => letter.toUpperCase()));
+          setStaffType(
+            (person.staff_type ?? "teacher")
+              .toLowerCase()
+              .replace(/^\w/, (letter: string) => letter.toUpperCase()),
+          );
           setSalaryType((person.salary_type ?? "monthly") as SalaryType);
           setAmount(String(person.salary_amount ?? ""));
-          setWeeklyHolidays(Array.isArray(person.weekly_holidays) && person.weekly_holidays.length
-            ? person.weekly_holidays
-            : ["Sun"]);
+          setWeeklyHolidays(
+            Array.isArray(person.weekly_holidays) &&
+              person.weekly_holidays.length
+              ? person.weekly_holidays
+              : ["Sun"],
+          );
           setDob(person.date_of_birth ?? "");
+          setJoiningDate(person.joining_date ?? "");
 
           if (person.photo_path) {
             const { data: photoData } = await supabase.storage
@@ -201,10 +224,7 @@ export default function AddTeacherScreen() {
           }
         }
       } catch (error: any) {
-        showAppAlert(
-          "Cannot open form",
-          error?.message ?? "Please try again."
-        );
+        showAppAlert("Cannot open form", error?.message ?? "Please try again.");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -224,7 +244,7 @@ export default function AddTeacherScreen() {
       if (!permission.granted) {
         showAppAlert(
           "Permission required",
-          "Allow photo library access to select a teacher photo."
+          "Allow photo library access to select a teacher photo.",
         );
         return;
       }
@@ -243,7 +263,7 @@ export default function AddTeacherScreen() {
     } catch (error: any) {
       showAppAlert(
         "Photo selection failed",
-        error?.message ?? "Could not open the photo library."
+        error?.message ?? "Could not open the photo library.",
       );
     }
   };
@@ -252,7 +272,7 @@ export default function AddTeacherScreen() {
     setWeeklyHolidays((current) =>
       current.includes(day)
         ? current.filter((item) => item !== day)
-        : [...current, day]
+        : [...current, day],
     );
   };
 
@@ -325,10 +345,7 @@ export default function AddTeacherScreen() {
 
   const saveTeacher = async () => {
     if (!instituteId) {
-      showAppAlert(
-        "Institute unavailable",
-        "Reopen this page and try again."
-      );
+      showAppAlert("Institute unavailable", "Reopen this page and try again.");
       return;
     }
 
@@ -343,11 +360,7 @@ export default function AddTeacherScreen() {
     }
 
     const salaryAmount = Number(amount);
-    if (
-      !amount.trim() ||
-      !Number.isFinite(salaryAmount) ||
-      salaryAmount < 0
-    ) {
+    if (!amount.trim() || !Number.isFinite(salaryAmount) || salaryAmount < 0) {
       showAppAlert("Invalid salary", "Enter a valid salary amount.");
       return;
     }
@@ -381,10 +394,7 @@ export default function AddTeacherScreen() {
         .maybeSingle();
 
       if (membershipError) throw membershipError;
-      if (
-        !membership ||
-        !["owner", "manager"].includes(membership.role)
-      ) {
+      if (!membership || !["owner", "manager"].includes(membership.role)) {
         throw new Error("You do not have permission to manage teachers.");
       }
 
@@ -397,6 +407,7 @@ export default function AddTeacherScreen() {
         salary_amount: salaryAmount,
         weekly_holidays: weeklyHolidays,
         date_of_birth: dob || null,
+        joining_date: joiningDate || null,
       };
 
       let savedTeacherId = teacherId;
@@ -419,7 +430,8 @@ export default function AddTeacherScreen() {
           .select("id")
           .single();
         if (insertError) throw insertError;
-        if (!staff?.id) throw new Error("Teacher was created but no ID was returned.");
+        if (!staff?.id)
+          throw new Error("Teacher was created but no ID was returned.");
         savedTeacherId = staff.id;
       }
 
@@ -429,12 +441,17 @@ export default function AddTeacherScreen() {
           await uploadTeacherPhoto(savedTeacherId);
         } catch (photoError: any) {
           showAppAlert(
-            isEditing ? "Teacher updated, photo upload failed" : "Teacher created, photo upload failed",
+            isEditing
+              ? "Teacher updated, photo upload failed"
+              : "Teacher created, photo upload failed",
             `${photoError?.message ?? "Unknown photo error"}\n\nThe teacher details were saved, but the new photo could not be uploaded.`,
             [
-              { text: "Back to Teachers", onPress: () => router.replace("/teacher" as never) },
+              {
+                text: "Back to Teachers",
+                onPress: () => router.replace("/teacher" as never),
+              },
               { text: "Stay here", style: "cancel" },
-            ]
+            ],
           );
           return;
         }
@@ -443,12 +460,12 @@ export default function AddTeacherScreen() {
       showAppAlert(
         isEditing ? "Teacher updated" : "Teacher added",
         `${name.trim()} ${isEditing ? "has been updated" : "has been added"} successfully${photoSelected ? " with photo" : ""}.`,
-        [{ text: "OK", onPress: () => router.replace("/teacher" as never) }]
+        [{ text: "OK", onPress: () => router.replace("/teacher" as never) }],
       );
     } catch (error: any) {
       showAppAlert(
         "Could not save teacher",
-        error?.message ?? "Please try again."
+        error?.message ?? "Please try again.",
       );
     } finally {
       setSaving(false);
@@ -462,28 +479,41 @@ export default function AddTeacherScreen() {
         ? "Daily wages (₹)"
         : "Batch wages (₹)";
 
-  const changeMonth = (delta: number) => {
-    setCalendarMonth(
-      new Date(
-        calendarMonth.getFullYear(),
-        calendarMonth.getMonth() + delta,
-        1
-      )
-    );
+  const openDatePicker = (target: "dob" | "joining") => {
+    setCalendarTarget(target);
+    const currentValue = target === "dob" ? dob : joiningDate;
+    let initial = new Date();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(currentValue)) {
+      const [year, month, day] = currentValue.split("-").map(Number);
+      initial = new Date(year, month - 1, day, 12, 0, 0);
+    }
+    setCalendarMonth(new Date(initial.getFullYear(), initial.getMonth(), 1));
+    setShowYearPicker(false);
+    setDateOpen(true);
   };
 
+  const todayISO = () => dateISO(new Date());
   const daysInMonth = new Date(
     calendarMonth.getFullYear(),
     calendarMonth.getMonth() + 1,
-    0
+    0,
   ).getDate();
+  const firstWeekday = new Date(
+    calendarMonth.getFullYear(),
+    calendarMonth.getMonth(),
+    1,
+  ).getDay();
+  const calendarCells = [
+    ...Array(firstWeekday).fill(0),
+    ...Array.from({ length: daysInMonth }, (_, index) => index + 1),
+  ];
 
-  const firstDay =
-    (new Date(
-      calendarMonth.getFullYear(),
-      calendarMonth.getMonth(),
-      1
-    ).getDay() + 6) % 7;
+  const selectCalendarDate = (value: string) => {
+    if (calendarTarget === "dob") setDob(value);
+    else setJoiningDate(value);
+    setDateOpen(false);
+    setShowYearPicker(false);
+  };
 
   return (
     <KeyboardAvoidingView
@@ -500,13 +530,17 @@ export default function AddTeacherScreen() {
         >
           <Feather name="arrow-left" size={25} color={WHITE} />
         </Pressable>
-        <Text style={styles.headerTitle}>{isEditing ? "Edit Teacher" : "Add Teacher"}</Text>
+        <Text style={styles.headerTitle}>
+          {isEditing ? "Edit Teacher" : "Add Teacher"}
+        </Text>
       </View>
 
       {loading ? (
         <View style={styles.loader}>
           <ActivityIndicator size="large" color={NAVY} />
-          <Text style={styles.loadingText}>{isEditing ? "Loading teacher details…" : "Preparing form…"}</Text>
+          <Text style={styles.loadingText}>
+            {isEditing ? "Loading teacher details…" : "Preparing form…"}
+          </Text>
         </View>
       ) : (
         <ScrollView
@@ -644,10 +678,7 @@ export default function AddTeacherScreen() {
                   style={[styles.day, selected && styles.daySelected]}
                 >
                   <Text
-                    style={[
-                      styles.dayText,
-                      selected && styles.dayTextSelected,
-                    ]}
+                    style={[styles.dayText, selected && styles.dayTextSelected]}
                   >
                     {day}
                   </Text>
@@ -657,17 +688,31 @@ export default function AddTeacherScreen() {
           </View>
 
           <Text style={styles.label}>
-            Date of birth{" "}
-            <Text style={styles.optional}>(optional)</Text>
+            Joining date <Text style={styles.optional}>(optional)</Text>
           </Text>
           <Pressable
             style={styles.dateInput}
-            onPress={() => {
-              setCalendarMonth(
-                dob ? new Date(`${dob}T12:00:00`) : new Date()
-              );
-              setDateOpen(true);
-            }}
+            onPress={() => openDatePicker("joining")}
+          >
+            <Text
+              style={[styles.dateText, !joiningDate && styles.placeholderText]}
+            >
+              {joiningDate ? prettyDate(joiningDate) : "Select joining date"}
+            </Text>
+            <Feather name="calendar" size={21} color={NAVY} />
+          </Pressable>
+          {!!joiningDate && (
+            <Pressable onPress={() => setJoiningDate("")}>
+              <Text style={styles.clearDate}>Clear joining date</Text>
+            </Pressable>
+          )}
+
+          <Text style={styles.label}>
+            Date of birth <Text style={styles.optional}>(optional)</Text>
+          </Text>
+          <Pressable
+            style={styles.dateInput}
+            onPress={() => openDatePicker("dob")}
           >
             <Text style={[styles.dateText, !dob && styles.placeholderText]}>
               {dob ? prettyDate(dob) : "Select date"}
@@ -697,7 +742,9 @@ export default function AddTeacherScreen() {
           {saving ? (
             <ActivityIndicator color={WHITE} />
           ) : (
-            <Text style={styles.saveText}>{isEditing ? "Update Teacher" : "Save Teacher"}</Text>
+            <Text style={styles.saveText}>
+              {isEditing ? "Update Teacher" : "Save Teacher"}
+            </Text>
           )}
         </Pressable>
       </View>
@@ -706,80 +753,206 @@ export default function AddTeacherScreen() {
         visible={dateOpen}
         transparent
         animationType="fade"
-        onRequestClose={() => setDateOpen(false)}
+        onRequestClose={() => {
+          setDateOpen(false);
+          setShowYearPicker(false);
+        }}
       >
         <View style={styles.modalShade}>
           <View style={styles.calendarModal}>
-            <View style={styles.calendarHeader}>
-              <Pressable onPress={() => changeMonth(-1)} hitSlop={10}>
-                <Feather name="chevron-left" size={25} color={NAVY} />
-              </Pressable>
-              <Text style={styles.calendarTitle}>
-                {calendarMonth.toLocaleDateString("en-IN", {
-                  month: "long",
-                  year: "numeric",
-                })}
-              </Text>
-              <Pressable onPress={() => changeMonth(1)} hitSlop={10}>
-                <Feather name="chevron-right" size={25} color={NAVY} />
+            <View style={styles.calendarTop}>
+              <View>
+                <Text style={styles.calendarEyebrow}>
+                  {calendarTarget === "dob"
+                    ? "TEACHER PROFILE"
+                    : "EMPLOYMENT DETAILS"}
+                </Text>
+                <Text style={styles.calendarHint}>
+                  {calendarTarget === "dob"
+                    ? "Choose date of birth"
+                    : "Choose joining date"}
+                </Text>
+              </View>
+              <Pressable
+                style={styles.todayButton}
+                onPress={() => {
+                  const now = new Date();
+                  setCalendarMonth(
+                    new Date(now.getFullYear(), now.getMonth(), 1),
+                  );
+                  setShowYearPicker(false);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Go to current month"
+              >
+                <Feather name="calendar" size={14} color={NAVY} />
+                <Text style={styles.todayButtonText}>Today</Text>
               </Pressable>
             </View>
 
-            <View style={styles.calendarGrid}>
-              {["M", "T", "W", "T", "F", "S", "S"].map((day, index) => (
-                <Text key={`${day}-${index}`} style={styles.weekday}>
-                  {day}
+            <View style={styles.monthRow}>
+              <Pressable
+                style={styles.monthArrow}
+                onPress={() => {
+                  setShowYearPicker(false);
+                  setCalendarMonth(
+                    new Date(
+                      calendarMonth.getFullYear(),
+                      calendarMonth.getMonth() - 1,
+                      1,
+                    ),
+                  );
+                }}
+                accessibilityLabel="Previous month"
+              >
+                <Feather name="chevron-left" size={22} color={NAVY} />
+              </Pressable>
+              <Pressable
+                style={styles.monthTitleButton}
+                onPress={() => setShowYearPicker((visible) => !visible)}
+                accessibilityRole="button"
+                accessibilityLabel="Choose year"
+                accessibilityState={{ expanded: showYearPicker }}
+              >
+                <Text style={styles.monthTitle}>
+                  {calendarMonth.toLocaleDateString("en-US", {
+                    month: "long",
+                    year: "numeric",
+                  })}
                 </Text>
-              ))}
+                <Feather
+                  name={showYearPicker ? "chevron-up" : "chevron-down"}
+                  size={17}
+                  color={NAVY}
+                />
+              </Pressable>
+              <Pressable
+                style={styles.monthArrow}
+                onPress={() => {
+                  setShowYearPicker(false);
+                  setCalendarMonth(
+                    new Date(
+                      calendarMonth.getFullYear(),
+                      calendarMonth.getMonth() + 1,
+                      1,
+                    ),
+                  );
+                }}
+                accessibilityLabel="Next month"
+              >
+                <Feather name="chevron-right" size={22} color={NAVY} />
+              </Pressable>
+            </View>
 
-              {Array.from({ length: firstDay }, (_, index) => (
-                <View key={`blank-${index}`} style={styles.dayBlank} />
-              ))}
-
-              {Array.from({ length: daysInMonth }, (_, index) => {
-                const day = index + 1;
-                const value = dateISO(
-                  new Date(
-                    calendarMonth.getFullYear(),
-                    calendarMonth.getMonth(),
-                    day
-                  )
-                );
-                const selected = value === dob;
-                const future = value > dateISO(new Date());
-
-                return (
-                  <Pressable
-                    key={day}
-                    disabled={future}
-                    onPress={() => {
-                      setDob(value);
-                      setDateOpen(false);
-                    }}
-                    style={[
-                      styles.calendarDay,
-                      selected && styles.calendarSelected,
-                      future && styles.futureDay,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.calendarDayText,
-                        selected && styles.calendarDayTextSelected,
-                      ]}
-                    >
+            {showYearPicker ? (
+              <View style={styles.yearPickerPanel}>
+                <Text style={styles.yearPickerTitle}>Select year</Text>
+                <ScrollView
+                  style={styles.yearList}
+                  contentContainerStyle={styles.yearListContent}
+                  showsVerticalScrollIndicator
+                  nestedScrollEnabled
+                >
+                  {yearOptions.map((year) => {
+                    const selectedYear = calendarMonth.getFullYear() === year;
+                    return (
+                      <Pressable
+                        key={year}
+                        style={[
+                          styles.yearOption,
+                          selectedYear && styles.yearOptionActive,
+                        ]}
+                        onPress={() => {
+                          setCalendarMonth(
+                            new Date(year, calendarMonth.getMonth(), 1),
+                          );
+                          setShowYearPicker(false);
+                        }}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: selectedYear }}
+                      >
+                        <Text
+                          style={[
+                            styles.yearOptionText,
+                            selectedYear && styles.yearOptionTextActive,
+                          ]}
+                        >
+                          {year}
+                        </Text>
+                        {selectedYear ? (
+                          <Feather name="check-circle" size={19} color={NAVY} />
+                        ) : null}
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            ) : (
+              <>
+                <View style={styles.calendarGrid}>
+                  {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => (
+                    <Text key={`${day}${index}`} style={styles.weekday}>
                       {day}
                     </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
+                  ))}
+                  {calendarCells.map((day, index) => {
+                    if (day === 0)
+                      return (
+                        <View key={`blank${index}`} style={styles.dayCell} />
+                      );
+                    const value = `${calendarMonth.getFullYear()}-${String(calendarMonth.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                    const activeDate =
+                      calendarTarget === "dob" ? dob : joiningDate;
+                    const selected = value === activeDate;
+                    const isToday = value === todayISO();
+                    const futureDob =
+                      calendarTarget === "dob" && value > todayISO();
+                    return (
+                      <Pressable
+                        key={day}
+                        disabled={futureDob}
+                        style={[
+                          styles.dayCell,
+                          selected && styles.dayCellSelected,
+                          !selected && isToday && styles.dayCellToday,
+                          futureDob && styles.dayCellDisabled,
+                        ]}
+                        onPress={() => selectCalendarDate(value)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${day} ${calendarMonth.toLocaleDateString("en-US", { month: "long" })} ${calendarMonth.getFullYear()}`}
+                        accessibilityState={{ selected, disabled: futureDob }}
+                      >
+                        <Text
+                          style={[
+                            styles.calendarDayText,
+                            selected && styles.calendarDayTextSelected,
+                            !selected && isToday && styles.dayTextToday,
+                            futureDob && styles.dayTextDisabled,
+                          ]}
+                        >
+                          {day}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <View style={styles.calendarFooter}>
+                  <View style={styles.legendDot} />
+                  <Text style={styles.calendarFooterText}>Today</Text>
+                  <View style={[styles.legendDot, styles.legendDotSelected]} />
+                  <Text style={styles.calendarFooterText}>Selected date</Text>
+                </View>
+              </>
+            )}
             <Pressable
-              style={styles.cancelDate}
-              onPress={() => setDateOpen(false)}
+              style={styles.calendarCancel}
+              onPress={() => {
+                setDateOpen(false);
+                setShowYearPicker(false);
+              }}
+              accessibilityRole="button"
             >
-              <Text style={styles.cancelDateText}>Cancel</Text>
+              <Text style={styles.calendarCancelText}>Cancel</Text>
             </Pressable>
           </View>
         </View>
@@ -807,10 +980,10 @@ export default function AddTeacherScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: WHITE },
+  screen: { flex: 1, backgroundColor: BG },
   header: {
     height: 78,
-    backgroundColor: NAVY,
+    backgroundColor: PURPLE_DARK,
     flexDirection: "row",
     alignItems: "center",
     paddingTop: 35,
@@ -823,14 +996,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: { fontSize: 22, fontWeight: "800", color: WHITE },
-  content: { paddingHorizontal: 18, paddingBottom: 22 },
-  photoArea: { alignItems: "center", paddingTop: 28, paddingBottom: 28 },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: WHITE,
+    letterSpacing: 0.2,
+  },
+  content: { paddingHorizontal: 18, paddingTop: 8, paddingBottom: 28 },
+  photoArea: { alignItems: "center", paddingTop: 24, paddingBottom: 20 },
   photoPlaceholder: {
     width: 112,
     height: 112,
     borderRadius: 30,
-    backgroundColor: BG,
+    backgroundColor: "#EEE8FF",
     borderWidth: 1.5,
     borderStyle: "dashed",
     borderColor: "#C8D5DE",
@@ -846,20 +1024,20 @@ const styles = StyleSheet.create({
   photoLabel: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#6585A2",
+    color: NAVY,
     marginTop: 10,
   },
   label: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: MUTED,
+    fontSize: 14,
+    fontWeight: "800",
+    color: PURPLE_DARK,
     marginTop: 20,
     marginBottom: 10,
   },
   optional: { fontWeight: "500", fontSize: 13, color: "#94A7B4" },
   input: {
     height: 60,
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1.5,
     borderColor: BORDER,
     paddingHorizontal: 16,
@@ -868,7 +1046,7 @@ const styles = StyleSheet.create({
   },
   phoneInput: {
     height: 60,
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1.5,
     borderColor: BORDER,
     paddingHorizontal: 15,
@@ -895,7 +1073,7 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 15, fontWeight: "600", color: MUTED },
   chipTextSelected: { color: WHITE },
   salarySegment: {
-    backgroundColor: "#EDF1F5",
+    backgroundColor: "#ECE6FC",
     padding: 5,
     borderRadius: 18,
     flexDirection: "row",
@@ -907,12 +1085,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderRadius: 14,
   },
-  salarySegmentSelected: { backgroundColor: WHITE },
+  salarySegmentSelected: {
+    backgroundColor: WHITE,
+    elevation: 2,
+    shadowColor: "#4C02F7",
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+  },
   salarySegmentText: { fontSize: 15, fontWeight: "700", color: MUTED },
   salarySegmentTextSelected: { color: NAVY },
   moneyInput: {
     height: 60,
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1.5,
     borderColor: BORDER,
     paddingHorizontal: 16,
@@ -938,7 +1123,7 @@ const styles = StyleSheet.create({
   dayTextSelected: { color: WHITE },
   dateInput: {
     height: 60,
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1.5,
     borderColor: BORDER,
     paddingHorizontal: 16,
@@ -964,7 +1149,7 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     backgroundColor: WHITE,
     borderTopWidth: 1,
-    borderTopColor: "#E5EBF0",
+    borderTopColor: BORDER,
   },
   saveButton: {
     height: 60,
@@ -972,6 +1157,11 @@ const styles = StyleSheet.create({
     backgroundColor: NAVY,
     alignItems: "center",
     justifyContent: "center",
+    elevation: 4,
+    shadowColor: NAVY,
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
   saveButtonDisabled: { opacity: 0.65 },
   saveText: { fontSize: 20, fontWeight: "800", color: WHITE },
@@ -986,38 +1176,141 @@ const styles = StyleSheet.create({
   },
   calendarModal: {
     width: "100%",
-    maxWidth: 380,
+    maxWidth: 430,
+    maxHeight: "92%",
     backgroundColor: WHITE,
     borderRadius: 22,
-    padding: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
   },
-  calendarHeader: {
+  calendarTop: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 14,
   },
-  calendarTitle: { fontSize: 17, fontWeight: "800", color: NAVY },
-  calendarGrid: { flexDirection: "row", flexWrap: "wrap" },
-  weekday: {
-    width: "14.2857%",
-    textAlign: "center",
-    paddingVertical: 8,
-    color: MUTED,
-    fontWeight: "700",
+  calendarEyebrow: {
+    color: NAVY,
+    fontSize: 10,
+    letterSpacing: 1.1,
+    fontWeight: "900",
+    marginBottom: 4,
   },
-  dayBlank: { width: "14.2857%", height: 42 },
-  calendarDay: {
-    width: "14.2857%",
-    height: 42,
+  calendarHint: { color: MUTED, fontSize: 13, fontWeight: "600" },
+  todayButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#F0E8FF",
+    borderRadius: 12,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+  },
+  todayButtonText: { color: NAVY, fontSize: 12, fontWeight: "900" },
+  monthRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 7,
+    marginBottom: 10,
+  },
+  monthArrow: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "#F6F2FF",
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 12,
   },
-  calendarSelected: { backgroundColor: NAVY },
-  futureDay: { opacity: 0.3 },
-  calendarDayText: { color: NAVY, fontWeight: "600" },
-  calendarDayTextSelected: { color: WHITE },
-  cancelDate: { marginTop: 12, alignSelf: "flex-end", padding: 10 },
-  cancelDateText: { color: NAVY, fontWeight: "800" },
+  monthTitleButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 12,
+    backgroundColor: "#F0E8FF",
+  },
+  monthTitle: { color: NAVY, fontSize: 14, fontWeight: "900" },
+  yearPickerPanel: {
+    borderWidth: 1,
+    borderColor: "#E9E0FF",
+    borderRadius: 15,
+    backgroundColor: "#FCFBFF",
+    padding: 10,
+  },
+  yearPickerTitle: {
+    color: NAVY,
+    fontSize: 13,
+    fontWeight: "900",
+    marginBottom: 6,
+    paddingHorizontal: 6,
+  },
+  yearList: { maxHeight: 300 },
+  yearListContent: { paddingBottom: 4 },
+  yearOption: {
+    minHeight: 44,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0ECF8",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderRadius: 10,
+  },
+  yearOptionActive: { backgroundColor: "#F0E8FF" },
+  yearOptionText: { color: PURPLE_DARK, fontSize: 14, fontWeight: "600" },
+  yearOptionTextActive: { color: NAVY, fontWeight: "900" },
+  calendarGrid: { flexDirection: "row", flexWrap: "wrap" },
+  weekday: {
+    width: "14.285%",
+    textAlign: "center",
+    color: "#96AAB9",
+    fontWeight: "900",
+    paddingVertical: 10,
+  },
+  dayCell: {
+    width: "14.285%",
+    aspectRatio: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 13,
+    marginVertical: 1,
+  },
+  dayCellSelected: { backgroundColor: NAVY },
+  dayCellToday: { borderWidth: 1.5, borderColor: "#C4B5FD" },
+  dayCellDisabled: { opacity: 0.35 },
+  calendarDayText: { color: PURPLE_DARK, fontSize: 14, fontWeight: "700" },
+  calendarDayTextSelected: { color: WHITE, fontWeight: "900" },
+  dayTextToday: { color: NAVY, fontWeight: "900" },
+  dayTextDisabled: { color: "#AAB2C0" },
+  calendarFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
+    marginTop: 10,
+    paddingTop: 12,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#C4B5FD",
+  },
+  legendDotSelected: { backgroundColor: NAVY, marginLeft: 10 },
+  calendarFooterText: { color: MUTED, fontSize: 11, fontWeight: "700" },
+  calendarCancel: {
+    minHeight: 44,
+    marginTop: 12,
+    borderRadius: 12,
+    backgroundColor: "#F0E8FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  calendarCancelText: { color: NAVY, fontWeight: "900" },
 });

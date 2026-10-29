@@ -1,4 +1,3 @@
-
 {
   "expo": {
     "name": "GyanDeepAcademy",
@@ -18,7 +17,12 @@
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [
-        "android.permission.INTERNET"
+        "android.permission.INTERNET",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.INTERNET",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ],
       "package": "com.sarbeswarpanda.GyanDeepAcademy"
     },
@@ -69,6 +73,11 @@
       "eas": {
         "projectId": "c707a282-0278-473c-8098-d8bad87dd1b6"
       }
-    }
+    },
+   "runtimeVersion": "1.0.0",
+    "updates": {
+      "url": "https://u.expo.dev/c707a282-0278-473c-8098-d8bad87dd1b6"
+    },
+    "ios": {}
   }
 }

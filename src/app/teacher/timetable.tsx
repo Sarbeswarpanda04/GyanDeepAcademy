@@ -10,17 +10,21 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
 
-const NAVY = "#1D2D44";
-const BLUE = "#3677D5";
-const BG = "#F4F7FB";
+const NAVY = "#241344";
+const PURPLE = "#611CD0";
+const PURPLE_DARK = "#44109D";
+const PURPLE_BRIGHT = "#4C02F7";
+const BG = "#F3F3FF";
 const WHITE = "#FFFFFF";
 const MUTED = "#718096";
-const BORDER = "#E7EDF4";
-const GREEN = "#18845D";
+const BORDER = "#E8E3F5";
+const GREEN = "#15966A";
+const LAVENDER = "#EDE7FF";
 const DAYS = [
   "Monday",
   "Tuesday",
@@ -130,8 +134,7 @@ export default function TeacherTimetableScreen() {
           supabase
             .from("institute_batches")
             .select("id,name,is_active")
-            .eq("institute_id", member.institute_id)
-            .eq("is_active", true),
+            .eq("institute_id", member.institute_id),
           supabase
             .from("institute_batch_periods")
             .select("id,batch_id,period_number,start_time,end_time")
@@ -147,8 +150,7 @@ export default function TeacherTimetableScreen() {
             .select(
               "id,institute_id,class_id,day_of_week,batch_id,period_id,subject_id,teacher_id",
             )
-            .eq("institute_id", member.institute_id)
-            .eq("teacher_id", member.staff_id),
+            .eq("institute_id", member.institute_id),
         ]);
       for (const result of [
         classRes,
@@ -164,7 +166,19 @@ export default function TeacherTimetableScreen() {
       setBatches((batchRes.data ?? []) as Batch[]);
       setPeriods((periodRes.data ?? []) as Period[]);
       setSubjects((subjectRes.data ?? []) as Subject[]);
-      setEntries((entryRes.data ?? []) as TimetableEntry[]);
+
+      // Keep every timetable row assigned to this teacher, whether the row
+      // references the staff record ID or the linked team-member ID.
+      // Fetching institute rows first also avoids query-side ID alias issues.
+      const teacherIds = new Set(
+        [member.staff_id, member.id].filter(
+          (id): id is string => typeof id === "string" && id.length > 0,
+        ),
+      );
+      const teacherEntries = ((entryRes.data ?? []) as TimetableEntry[]).filter(
+        (entry) => teacherIds.has(entry.teacher_id),
+      );
+      setEntries(teacherEntries);
     } catch (error) {
       const message =
         error instanceof Error
@@ -232,7 +246,7 @@ export default function TeacherTimetableScreen() {
             void load();
           }}
         >
-          <Feather name="refresh-cw" size={18} color={BLUE} />
+          <Feather name="refresh-cw" size={18} color={PURPLE} />
         </TouchableOpacity>
       </View>
 
@@ -248,12 +262,17 @@ export default function TeacherTimetableScreen() {
               setRefreshing(true);
               void load();
             }}
-            tintColor={BLUE}
+            tintColor={PURPLE}
           />
         }
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.welcomeCard}>
+        <LinearGradient
+          colors={[PURPLE, PURPLE_DARK, PURPLE_BRIGHT]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.welcomeCard}
+        >
           <View style={styles.welcomeIcon}>
             <Feather name="calendar" size={22} color={WHITE} />
           </View>
@@ -266,18 +285,18 @@ export default function TeacherTimetableScreen() {
               Only periods assigned to your account are shown.
             </Text>
           </View>
-        </View>
+        </LinearGradient>
 
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
-            <View style={[styles.statIcon, { backgroundColor: "#EAF2FF" }]}>
-              <Feather name="calendar" size={17} color={BLUE} />
+            <View style={[styles.statIcon, { backgroundColor: LAVENDER }]}>
+              <Feather name="calendar" size={17} color={PURPLE} />
             </View>
             <Text style={styles.statValue}>{schedule.length}</Text>
             <Text style={styles.statLabel}>Periods {selectedDay}</Text>
           </View>
           <View style={styles.statCard}>
-            <View style={[styles.statIcon, { backgroundColor: "#E6F7EF" }]}>
+            <View style={[styles.statIcon, { backgroundColor: "#E4F7EF" }]}>
               <Feather name="book-open" size={17} color={GREEN} />
             </View>
             <Text style={styles.statValue}>{weeklyCount}</Text>
@@ -342,7 +361,7 @@ export default function TeacherTimetableScreen() {
 
         {loading ? (
           <View style={styles.stateCard}>
-            <ActivityIndicator size="large" color={BLUE} />
+            <ActivityIndicator size="large" color={PURPLE} />
             <Text style={styles.stateTitle}>Loading timetable</Text>
             <Text style={styles.stateText}>
               Fetching your assigned periods…
@@ -365,7 +384,7 @@ export default function TeacherTimetableScreen() {
         ) : schedule.length === 0 ? (
           <View style={styles.stateCard}>
             <View style={styles.emptyIcon}>
-              <Feather name="calendar" size={25} color={BLUE} />
+              <Feather name="calendar" size={25} color={PURPLE} />
             </View>
             <Text style={styles.stateTitle}>No periods assigned</Text>
             <Text style={styles.stateText}>
@@ -390,7 +409,7 @@ export default function TeacherTimetableScreen() {
                       PERIOD {item.period?.period_number ?? index + 1}
                     </Text>
                     <View style={styles.timePill}>
-                      <Feather name="clock" size={12} color={BLUE} />
+                      <Feather name="clock" size={12} color={PURPLE} />
                       <Text style={styles.timeText}>
                         {timeLabel(item.period?.start_time)} –{" "}
                         {timeLabel(item.period?.end_time)}
@@ -442,20 +461,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   headerText: { flex: 1 },
-  eyebrow: { color: BLUE, fontSize: 10, letterSpacing: 1.4, fontWeight: "800" },
+  eyebrow: {
+    color: PURPLE,
+    fontSize: 10,
+    letterSpacing: 1.4,
+    fontWeight: "800",
+  },
   title: { color: NAVY, fontSize: 25, fontWeight: "800", marginTop: 2 },
   subtitle: { color: MUTED, fontSize: 12, marginTop: 3 },
   refreshButton: {
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: "#EAF2FF",
+    backgroundColor: LAVENDER,
     alignItems: "center",
     justifyContent: "center",
   },
   content: { paddingHorizontal: 18, paddingTop: 2, gap: 17 },
   welcomeCard: {
-    backgroundColor: NAVY,
+    backgroundColor: PURPLE,
     borderRadius: 20,
     padding: 18,
     flexDirection: "row",
@@ -472,13 +496,13 @@ const styles = StyleSheet.create({
   },
   welcomeCopy: { flex: 1 },
   welcomeLabel: {
-    color: "#B9D2F8",
+    color: "#E9DDFF",
     fontSize: 9,
     fontWeight: "800",
     letterSpacing: 1.2,
   },
   teacherName: { color: WHITE, fontSize: 19, fontWeight: "800", marginTop: 4 },
-  welcomeSub: { color: "#D4DEEB", fontSize: 11, lineHeight: 16, marginTop: 4 },
+  welcomeSub: { color: "#F0E9FF", fontSize: 11, lineHeight: 16, marginTop: 4 },
   statsRow: { flexDirection: "row", gap: 12 },
   statCard: {
     flex: 1,
@@ -487,6 +511,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
     padding: 14,
+    shadowColor: "#321064",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
   },
   statIcon: {
     width: 34,
@@ -510,7 +539,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    backgroundColor: "#E6F7EF",
+    backgroundColor: "#E4F7EF",
     paddingHorizontal: 9,
     paddingVertical: 6,
     borderRadius: 20,
@@ -533,7 +562,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
   },
-  dayChipActive: { backgroundColor: BLUE, borderColor: BLUE },
+  dayChipActive: { backgroundColor: PURPLE, borderColor: PURPLE },
   dayChipText: { color: NAVY, fontSize: 12, fontWeight: "800" },
   dayChipTextActive: { color: WHITE },
   dayCount: {
@@ -541,7 +570,7 @@ const styles = StyleSheet.create({
     height: 22,
     paddingHorizontal: 5,
     borderRadius: 8,
-    backgroundColor: "#F0F4F9",
+    backgroundColor: "#F0EBFA",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -555,7 +584,7 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: BLUE,
+    backgroundColor: PURPLE,
     borderWidth: 3,
     borderColor: "#D8E7FF",
     marginTop: 17,
@@ -566,7 +595,7 @@ const styles = StyleSheet.create({
     top: 29,
     bottom: -2,
     width: 2,
-    backgroundColor: "#DCE7F5",
+    backgroundColor: "#E2D8F5",
   },
   periodBody: {
     flex: 1,
@@ -576,6 +605,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 14,
     marginBottom: 12,
+    shadowColor: "#321064",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
   },
   periodTop: {
     flexDirection: "row",
@@ -594,12 +628,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    backgroundColor: "#EAF2FF",
+    backgroundColor: LAVENDER,
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 6,
   },
-  timeText: { color: BLUE, fontSize: 10, fontWeight: "700" },
+  timeText: { color: PURPLE, fontSize: 10, fontWeight: "700" },
   subjectName: { color: NAVY, fontSize: 17, fontWeight: "800", marginTop: 11 },
   detailRow: {
     flexDirection: "row",
@@ -637,7 +671,7 @@ const styles = StyleSheet.create({
     width: 54,
     height: 54,
     borderRadius: 18,
-    backgroundColor: "#EAF2FF",
+    backgroundColor: LAVENDER,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 13,
@@ -658,7 +692,7 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: 16,
-    backgroundColor: BLUE,
+    backgroundColor: PURPLE,
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 11,

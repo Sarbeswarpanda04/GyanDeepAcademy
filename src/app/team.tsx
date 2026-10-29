@@ -3,6 +3,7 @@ import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Pressable,
   ScrollView,
   StatusBar,
@@ -11,16 +12,22 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
 import AppAlert, { type AppAlertType } from "../components/AppAlert";
 
-const NAVY = "#202F42";
-const BG = "#F1F5F8";
-const MUTED = "#9DB1BE";
+const NAVY = "#1F2937";
+const PURPLE = "#611CD0";
+const PURPLE_DARK = "#44109D";
+const PURPLE_BRIGHT = "#4C02F7";
+const BG = "#F3F3FF";
+const MUTED = "#718096";
 const WHITE = "#FFFFFF";
+const BORDER = "#E8E3F5";
 const RED = "#C53E3E";
+const WHATSAPP = "#168A4A";
 
 type TeamMember = {
   id: string;
@@ -31,6 +38,7 @@ type TeamMember = {
   phone?: string | null;
   full_name?: string | null;
   status?: string;
+  login_pin?: string | null;
 };
 
 type AlertState = {
@@ -108,19 +116,58 @@ export default function TeamScreen() {
 
       if (staffError) throw staffError;
 
+      // profiles is the source of truth for account-holder identity. The profile
+      // id matches auth.users.id, which is the user_id in institute_members.
+      const memberUserIds = Array.from(
+        new Set((instituteMembers ?? []).map((member: any) => member.user_id).filter(Boolean)),
+      );
+      const { data: profiles, error: profilesError } = memberUserIds.length
+        ? await supabase
+            .from("profiles")
+            .select("id,full_name,mobile")
+            .in("id", memberUserIds)
+        : { data: [], error: null };
+
+      if (profilesError) throw profilesError;
+
+      const profileById = new Map(
+        (profiles ?? []).map((profile: any) => [profile.id, profile]),
+      );
+
       const mappedMembers: TeamMember[] = (instituteMembers ?? []).map(
         (member: any) => {
           const linkedStaff = (staff ?? []).find(
             (person: any) => person.created_by === member.user_id,
           );
+          const profile = profileById.get(member.user_id);
+          const isCurrentUser = member.user_id === user.id;
+          const authMetadata = isCurrentUser ? (user.user_metadata ?? {}) : {};
+          const authName =
+            authMetadata.full_name ??
+            authMetadata.name ??
+            authMetadata.display_name ??
+            null;
+          const authPhone =
+            user.phone ??
+            authMetadata.phone ??
+            authMetadata.mobile ??
+            authMetadata.phone_number ??
+            null;
+          const isOwner = String(member.role ?? "").toLowerCase() === "owner";
 
           return {
             id: `membership-${member.id}`,
             source: "membership",
             user_id: member.user_id,
             role: member.role,
-            full_name: linkedStaff?.full_name ?? null,
-            phone: linkedStaff?.phone ?? null,
+            // Never use a teacher/staff record for the owner card. The owner's
+            // name and mobile come directly from public.profiles.
+            full_name: isOwner
+              ? (profile?.full_name || (isCurrentUser ? authName : null) || "Primary Owner")
+              : (profile?.full_name || linkedStaff?.full_name || (isCurrentUser ? authName : null)),
+            phone: isOwner
+              ? (profile?.mobile || (isCurrentUser ? authPhone : null))
+              : (profile?.mobile || linkedStaff?.phone || (isCurrentUser ? authPhone : null)),
             status: "active",
           };
         },
@@ -135,6 +182,32 @@ export default function TeamScreen() {
 
       if (teamError) throw teamError;
 
+      // Credentials are fetched through an authorized Edge Function; do not query
+      // institute_team_credentials directly from the client.
+      let pinByMemberId: Record<string, string> = {};
+      const activeTeamIds = (teamRows ?? []).map((member: any) => member.id);
+      if (activeTeamIds.length) {
+        try {
+          const { data: credentialData, error: credentialError } =
+            await supabase.functions.invoke("get-team-member-credentials", {
+              body: { institute_id: instituteId, member_ids: activeTeamIds },
+            });
+          if (credentialError) throw credentialError;
+          const credentials = credentialData?.credentials ?? [];
+          pinByMemberId = Object.fromEntries(
+            credentials
+              .filter((item: any) => item?.team_member_id && item?.login_pin)
+              .map((item: any) => [
+                String(item.team_member_id),
+                String(item.login_pin),
+              ]),
+          );
+        } catch (credentialError) {
+          // Team management remains usable if the credential endpoint is not deployed.
+          console.warn("Unable to load team login PINs:", credentialError);
+        }
+      }
+
       const teamCards: TeamMember[] = (teamRows ?? []).map(
         (member: any) => ({
           id: `team-${member.id}`,
@@ -145,6 +218,7 @@ export default function TeamScreen() {
           full_name: member.full_name,
           phone: member.phone,
           status: member.is_active ? "active" : "inactive",
+          login_pin: pinByMemberId[String(member.id)] ?? null,
         }),
       );
 
@@ -266,9 +340,12 @@ export default function TeamScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="dark-content" backgroundColor={WHITE} />
+      <StatusBar barStyle="light-content" backgroundColor={PURPLE_DARK} />
 
-      <View
+      <LinearGradient
+        colors={[PURPLE, PURPLE_DARK, PURPLE_BRIGHT]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={[
           styles.header,
           { paddingTop: Math.max(insets.top, 12) + 12 },
@@ -280,19 +357,32 @@ export default function TeamScreen() {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Feather name="chevron-left" size={29} color={NAVY} />
+          <Feather name="chevron-left" size={27} color={WHITE} />
         </Pressable>
 
-        <Text style={styles.title}>Team</Text>
-      </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>Team Management</Text>
+          <Text style={styles.headerSubtitle}>Manage members and share login access</Text>
+        </View>
+        <View style={styles.headerIcon}>
+          <Feather name="users" size={21} color={WHITE} />
+        </View>
+      </LinearGradient>
 
       <ScrollView contentContainerStyle={styles.content}>
         {loading ? (
-          <ActivityIndicator
-            color={NAVY}
-            size="large"
-            style={{ marginTop: 32 }}
-          />
+          <View style={styles.skeletonList}>
+            {[0, 1, 2].map((item) => (
+              <View key={item} style={styles.skeletonCard}>
+                <View style={styles.skeletonAvatar} />
+                <View style={{ flex: 1, gap: 10 }}>
+                  <View style={styles.skeletonLine} />
+                  <View style={[styles.skeletonLine, { width: "62%" }]} />
+                  <View style={[styles.skeletonLine, { width: "42%", height: 18 }]} />
+                </View>
+              </View>
+            ))}
+          </View>
         ) : (
           <>
             {primary ? (
@@ -376,6 +466,55 @@ function MemberCard({
   const isManagedTeamMember =
     member.source === "team" && Boolean(member.recordId);
 
+  const shareLoginDetails = async () => {
+    const rawPhone = (member.phone ?? "").replace(/\D/g, "");
+    const phone =
+      rawPhone.length === 10 ? `91${rawPhone}` :
+      rawPhone.length === 12 && rawPhone.startsWith("91") ? rawPhone :
+      rawPhone;
+    if (!phone || phone.length < 10) {
+      Alert.alert("Phone number required", "Add a valid phone number to share login details on WhatsApp.");
+      return;
+    }
+    if (!member.login_pin) {
+      Alert.alert(
+        "Login PIN unavailable",
+        "The PIN could not be loaded. Ensure the get-team-member-credentials Edge Function is deployed and returns this member's login PIN.",
+      );
+      return;
+    }
+    const message = [
+  "🎓 GyanDeep Academy — Login Details",
+  "",
+  "📲 Download and install the GyanDeep Academy app:",
+  "https://gyandeep.ac.sarbeswarpanda.in",
+  "",
+  "Please download and install the app before logging in.",
+  "",
+  "👤 LOGIN DETAILS",
+  `Name: ${member.full_name || "Team member"}`,
+  `Role: ${label}`,
+  `Login phone: ${member.phone}`,
+  `Login PIN: ${member.login_pin}`,
+  "",
+  "🔒 Please keep your login PIN private.",
+  "",
+  "Thank you,",
+  "GyanDeep Academy",
+].join("\n");
+
+const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+
+try {
+  await Linking.openURL(url);
+} catch {
+  Alert.alert(
+    "Unable to open WhatsApp",
+    "Please check that WhatsApp or a compatible app is available."
+  );
+}
+  };
+
   return (
     <View style={styles.memberCard}>
       <View style={styles.avatar}>
@@ -393,7 +532,7 @@ function MemberCard({
 
         <Text style={styles.memberSub} numberOfLines={2}>
           {label}
-          {member.phone && display !== member.phone ? ` · ${member.phone}` : ""}
+          {member.phone ? ` · ${member.phone}` : ""}
         </Text>
 
         <View style={styles.activePill}>
@@ -404,6 +543,28 @@ function MemberCard({
         </View>
 
         {isManagedTeamMember && (
+          <>
+            <View style={styles.pinBox}>
+              <View style={styles.pinIcon}>
+                <Feather name="key" size={15} color={PURPLE} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.pinLabel}>LOGIN PIN</Text>
+                <Text style={styles.pinValue}>
+                  {member.login_pin ?? "Unavailable"}
+                </Text>
+              </View>
+              <Feather name="shield" size={16} color={PURPLE} />
+            </View>
+            <Pressable
+              style={styles.whatsappButton}
+              onPress={() => void shareLoginDetails()}
+              accessibilityRole="button"
+              accessibilityLabel={`Share login details with ${display} on WhatsApp`}
+            >
+              <Feather name="message-circle" size={17} color={WHITE} />
+              <Text style={styles.whatsappText}>Share login details on WhatsApp</Text>
+            </Pressable>
           <View style={styles.actions}>
             <Pressable
               style={styles.editButton}
@@ -432,6 +593,7 @@ function MemberCard({
               )}
             </Pressable>
           </View>
+          </>
         )}
       </View>
     </View>
@@ -441,36 +603,59 @@ function MemberCard({
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: BG },
   header: {
-    backgroundColor: WHITE,
-    paddingHorizontal: 22,
-    paddingBottom: 18,
+    paddingHorizontal: 20,
+    paddingBottom: 22,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E8EDF2",
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
-  back: { width: 34, height: 38, justifyContent: "center" },
-  title: { fontSize: 27, fontWeight: "900", color: NAVY },
-  content: { padding: 18, paddingBottom: 140, gap: 14 },
+  back: {
+    width: 40, height: 40, borderRadius: 14,
+    justifyContent: "center", alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.16)",
+  },
+  headerIcon: {
+    width: 42, height: 42, borderRadius: 14,
+    justifyContent: "center", alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.16)",
+  },
+  title: { fontSize: 22, fontWeight: "900", color: WHITE },
+  headerSubtitle: { fontSize: 11, color: "#E9DFFF", marginTop: 4 },
+  content: { padding: 16, paddingBottom: 140, gap: 14 },
+  skeletonList: { gap: 14, marginTop: 6 },
+  skeletonCard: {
+    backgroundColor: WHITE, borderRadius: 22, padding: 18,
+    flexDirection: "row", gap: 14, borderWidth: 1, borderColor: BORDER,
+  },
+  skeletonAvatar: { width: 54, height: 54, borderRadius: 18, backgroundColor: "#E9E3F8" },
+  skeletonLine: { height: 12, borderRadius: 8, backgroundColor: "#EEEAF8", width: "82%" },
   memberCard: {
     backgroundColor: WHITE,
     borderRadius: 24,
-    padding: 18,
+    padding: 17,
     minHeight: 126,
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 14,
+    gap: 13,
+    borderWidth: 1,
+    borderColor: BORDER,
+    shadowColor: "#4C02F7",
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 2,
   },
   avatar: {
     width: 56,
     height: 56,
     borderRadius: 19,
-    backgroundColor: "#EEF2F7",
+    backgroundColor: "#EEE7FF",
     alignItems: "center",
     justifyContent: "center",
   },
-  memberDetails: { flex: 1 },
+  memberDetails: { flex: 1, minWidth: 0 },
   memberName: { fontSize: 18, fontWeight: "900", color: NAVY },
   memberSub: {
     fontSize: 13,
@@ -496,6 +681,35 @@ const styles = StyleSheet.create({
     backgroundColor: "#43814A",
   },
   activeText: { color: "#43814A", fontSize: 11, fontWeight: "800" },
+  pinBox: {
+    marginTop: 12,
+    padding: 11,
+    borderRadius: 14,
+    backgroundColor: "#F7F4FF",
+    borderWidth: 1,
+    borderColor: "#E5DBFF",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  pinIcon: {
+    width: 30, height: 30, borderRadius: 10,
+    backgroundColor: "#E9DFFF", alignItems: "center", justifyContent: "center",
+  },
+  pinLabel: { color: MUTED, fontSize: 9, fontWeight: "900", letterSpacing: 1 },
+  pinValue: { color: PURPLE_DARK, fontSize: 17, fontWeight: "900", marginTop: 2, letterSpacing: 1.5 },
+  whatsappButton: {
+    marginTop: 10,
+    backgroundColor: WHATSAPP,
+    borderRadius: 12,
+    minHeight: 42,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  whatsappText: { color: WHITE, fontSize: 12, fontWeight: "800" },
   actions: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -507,7 +721,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     borderWidth: 1,
-    borderColor: "#DCE5EC",
+    borderColor: BORDER,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 9,
@@ -528,7 +742,7 @@ const styles = StyleSheet.create({
   addButton: {
     position: "absolute",
     right: 22,
-    backgroundColor: NAVY,
+    backgroundColor: PURPLE_DARK,
     borderRadius: 30,
     paddingHorizontal: 23,
     paddingVertical: 17,
@@ -543,6 +757,8 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     padding: 22,
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: BORDER,
   },
-  muted: { color: MUTED, fontSize: 15 },
+  muted: { color: MUTED, fontSize: 14 },
 });

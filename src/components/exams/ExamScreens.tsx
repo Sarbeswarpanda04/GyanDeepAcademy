@@ -15,25 +15,26 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { WebView } from "react-native-webview";
-import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
 
 const C = {
-  navy: "#172B4D",
-  blue: "#3677D5",
-  pale: "#EEF5FF",
-  bg: "#F4F7FB",
+  navy: "#241344",
+  blue: "#611CD0",
+  pale: "#EDE7FF",
+  bg: "#F3F3FF",
   white: "#FFFFFF",
-  text: "#243247",
-  muted: "#748198",
-  border: "#E4EAF2",
-  green: "#159A82",
-  red: "#D95362",
-  amber: "#D28A26",
-  purple: "#7956C7",
+  text: "#30204A",
+  muted: "#718096",
+  border: "#E8E3F5",
+  green: "#15966A",
+  red: "#D9535D",
+  amber: "#C7831F",
+  purple: "#4C02F7",
+  purpleDark: "#44109D",
 };
 type Role = "owner" | "teacher";
 type Member = {
@@ -229,6 +230,16 @@ export default function ExamScreens({
   const [duration, setDuration] = useState(60);
   const [pickerKind, setPickerKind] = useState<"date" | "time" | null>(null);
   const [pickerDraft, setPickerDraft] = useState<Date>(new Date());
+  const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
+  const [showYearPicker, setShowYearPicker] = useState(false);
+  const [timeHour, setTimeHour] = useState(9);
+  const [timeMinute, setTimeMinute] = useState(0);
+  const [timePeriod, setTimePeriod] = useState<"AM" | "PM">("AM");
+  const currentYear = new Date().getFullYear();
+  const yearOptions = Array.from(
+    { length: currentYear + 11 - 1900 },
+    (_, index) => currentYear + 10 - index,
+  );
   const [durationMenuOpen, setDurationMenuOpen] = useState(false);
   const [description, setDescription] = useState("");
   const [classId, setClassId] = useState("");
@@ -587,36 +598,51 @@ export default function ExamScreens({
     } else if (kind === "time" && /^\d{2}:\d{2}$/.test(startTime)) {
       const [hours, minutes] = startTime.split(":").map(Number);
       initial.setHours(hours, minutes, 0, 0);
+      setTimeHour(hours % 12 || 12);
+      setTimeMinute(minutes);
+      setTimePeriod(hours >= 12 ? "PM" : "AM");
+    } else if (kind === "time") {
+      setTimeHour(9);
+      setTimeMinute(0);
+      setTimePeriod("AM");
     }
     setPickerDraft(initial);
+    if (kind === "date") {
+      setCalendarMonth(new Date(initial.getFullYear(), initial.getMonth(), 1));
+      setShowYearPicker(false);
+    }
     setPickerKind(kind);
   };
 
-  const onNativePickerChange = (event: DateTimePickerEvent, value?: Date) => {
-    if (Platform.OS === "android") setPickerKind(null);
-    if (event.type === "dismissed" || !value) return;
-    setPickerDraft(value);
-    if (Platform.OS === "android") {
-      if (pickerKind === "date") {
-        const y = value.getFullYear();
-        const m = String(value.getMonth() + 1).padStart(2, "0");
-        const d = String(value.getDate()).padStart(2, "0");
-        setExamDate(`${y}-${m}-${d}`);
-      } else {
-        setStartTime(`${String(value.getHours()).padStart(2, "0")}:${String(value.getMinutes()).padStart(2, "0")}`);
-      }
-    }
+  const todayISO = () => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  };
+
+  const daysInMonth = new Date(
+    calendarMonth.getFullYear(),
+    calendarMonth.getMonth() + 1,
+    0,
+  ).getDate();
+  const firstWeekday = new Date(
+    calendarMonth.getFullYear(),
+    calendarMonth.getMonth(),
+    1,
+  ).getDay();
+  const calendarCells = [
+    ...Array(firstWeekday).fill(0),
+    ...Array.from({ length: daysInMonth }, (_, index) => index + 1),
+  ];
+
+  const selectExamDate = (value: string) => {
+    setExamDate(value);
+    setPickerKind(null);
+    setShowYearPicker(false);
   };
 
   const commitPicker = () => {
-    if (pickerKind === "date") {
-      const y = pickerDraft.getFullYear();
-      const m = String(pickerDraft.getMonth() + 1).padStart(2, "0");
-      const d = String(pickerDraft.getDate()).padStart(2, "0");
-      setExamDate(`${y}-${m}-${d}`);
-    } else if (pickerKind === "time") {
-      setStartTime(`${String(pickerDraft.getHours()).padStart(2, "0")}:${String(pickerDraft.getMinutes()).padStart(2, "0")}`);
-    }
+    const hour24 = (timeHour % 12) + (timePeriod === "PM" ? 12 : 0);
+    setStartTime(`${String(hour24).padStart(2, "0")}:${String(timeMinute).padStart(2, "0")}`);
     setPickerKind(null);
   };
   const changeExamSubject = (id: string) => {
@@ -1055,19 +1081,251 @@ export default function ExamScreens({
   const frame = (children: React.ReactNode) => (
     <View style={s.screen}>
       <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
-      {Platform.OS === "android" && pickerKind ? (
-        <DateTimePicker value={pickerDraft} mode={pickerKind} display="default" onChange={onNativePickerChange}
-          minimumDate={pickerKind === "date" ? new Date(new Date().setHours(0, 0, 0, 0)) : undefined} />
-      ) : null}
-      <Modal visible={Platform.OS === "ios" && !!pickerKind} transparent animationType="fade" onRequestClose={() => setPickerKind(null)}>
+      <Modal
+        visible={pickerKind === "date"}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setPickerKind(null);
+          setShowYearPicker(false);
+        }}
+      >
         <View style={s.modalBackdrop}>
-          <View style={s.modalCard}>
-            <Text style={s.modalTitle}>{pickerKind === "date" ? "Choose exam date" : "Choose start time"}</Text>
-            {pickerKind ? <DateTimePicker value={pickerDraft} mode={pickerKind} display="spinner" onChange={onNativePickerChange}
-              minimumDate={pickerKind === "date" ? new Date(new Date().setHours(0, 0, 0, 0)) : undefined} /> : null}
+          <View style={s.calendarModalCard}>
+            <View style={s.calendarTop}>
+              <View>
+                <Text style={s.calendarEyebrow}>EXAM SCHEDULE</Text>
+                <Text style={s.calendarHint}>Choose exam date</Text>
+              </View>
+              <TouchableOpacity
+                style={s.todayButton}
+                onPress={() => {
+                  const now = new Date();
+                  setCalendarMonth(new Date(now.getFullYear(), now.getMonth(), 1));
+                  setShowYearPicker(false);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Go to current month"
+              >
+                <Feather name="calendar" size={14} color={C.blue} />
+                <Text style={s.todayButtonText}>Today</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={s.monthRow}>
+              <TouchableOpacity
+                style={s.monthArrow}
+                onPress={() => {
+                  setShowYearPicker(false);
+                  setCalendarMonth(
+                    new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1),
+                  );
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Previous month"
+              >
+                <Feather name="chevron-left" size={22} color={C.blue} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={s.monthTitleButton}
+                onPress={() => setShowYearPicker((visible) => !visible)}
+                accessibilityRole="button"
+                accessibilityLabel="Choose year"
+                accessibilityState={{ expanded: showYearPicker }}
+              >
+                <Text style={s.monthTitle}>
+                  {calendarMonth.toLocaleDateString("en-US", {
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </Text>
+                <Feather
+                  name={showYearPicker ? "chevron-up" : "chevron-down"}
+                  size={17}
+                  color={C.blue}
+                />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={s.monthArrow}
+                onPress={() => {
+                  setShowYearPicker(false);
+                  setCalendarMonth(
+                    new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1),
+                  );
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Next month"
+              >
+                <Feather name="chevron-right" size={22} color={C.blue} />
+              </TouchableOpacity>
+            </View>
+
+            {showYearPicker ? (
+              <View style={s.yearPickerPanel}>
+                <Text style={s.yearPickerTitle}>Select year</Text>
+                <ScrollView
+                  style={s.yearList}
+                  contentContainerStyle={s.yearListContent}
+                  showsVerticalScrollIndicator
+                  nestedScrollEnabled
+                >
+                  {yearOptions.map((year) => {
+                    const selectedYear = calendarMonth.getFullYear() === year;
+                    return (
+                      <TouchableOpacity
+                        key={year}
+                        style={[s.yearOption, selectedYear && s.yearOptionActive]}
+                        onPress={() => {
+                          setCalendarMonth(new Date(year, calendarMonth.getMonth(), 1));
+                          setShowYearPicker(false);
+                        }}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: selectedYear }}
+                      >
+                        <Text
+                          style={[
+                            s.yearOptionText,
+                            selectedYear && s.yearOptionTextActive,
+                          ]}
+                        >
+                          {year}
+                        </Text>
+                        {selectedYear ? (
+                          <Feather name="check-circle" size={19} color={C.blue} />
+                        ) : null}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            ) : (
+              <>
+                <View style={s.calendarGrid}>
+                  {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => (
+                    <Text key={`${day}${index}`} style={s.weekday}>
+                      {day}
+                    </Text>
+                  ))}
+
+                  {calendarCells.map((day, index) => {
+                    if (day === 0) {
+                      return <View key={`blank${index}`} style={s.dayCell} />;
+                    }
+
+                    const value = `${calendarMonth.getFullYear()}-${String(
+                      calendarMonth.getMonth() + 1,
+                    ).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                    const isSelected = value === examDate;
+                    const isToday = value === todayISO();
+                    const isPast = value < todayISO();
+
+                    return (
+                      <TouchableOpacity
+                        key={day}
+                        disabled={isPast}
+                        style={[
+                          s.dayCell,
+                          isSelected && s.dayCellSelected,
+                          !isSelected && isToday && s.dayCellToday,
+                          isPast && s.dayCellDisabled,
+                        ]}
+                        onPress={() => selectExamDate(value)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${day} ${calendarMonth.toLocaleDateString("en-US", { month: "long" })} ${calendarMonth.getFullYear()}`}
+                        accessibilityState={{ selected: isSelected, disabled: isPast }}
+                      >
+                        <Text
+                          style={[
+                            s.dayText,
+                            isSelected && s.dayTextSelected,
+                            !isSelected && isToday && s.dayTextToday,
+                            isPast && s.dayTextDisabled,
+                          ]}
+                        >
+                          {day}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <View style={s.calendarFooter}>
+                  <View style={s.legendDot} />
+                  <Text style={s.calendarFooterText}>Today</Text>
+                  <View style={[s.legendDot, s.legendDotSelected]} />
+                  <Text style={s.calendarFooterText}>Selected date</Text>
+                </View>
+              </>
+            )}
+
+            <TouchableOpacity
+              style={s.calendarCancel}
+              onPress={() => {
+                setPickerKind(null);
+                setShowYearPicker(false);
+              }}
+              accessibilityRole="button"
+            >
+              <Text style={s.calendarCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+      <Modal visible={pickerKind === "time"} transparent animationType="fade" onRequestClose={() => setPickerKind(null)}>
+        <View style={s.modalBackdrop}>
+          <View style={s.timeModalCard}>
+            <View style={s.timeHeader}>
+              <View>
+                <Text style={s.calendarEyebrow}>EXAM SCHEDULE</Text>
+                <Text style={s.timeTitle}>Choose start time</Text>
+              </View>
+              <View style={s.timeIconBubble}><Feather name="clock" size={20} color={C.blue} /></View>
+            </View>
+
+            <LinearGradient colors={["#611CD0", "#44109D", "#4C02F7"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.timePreview}>
+              <Text style={s.timePreviewLabel}>SELECTED TIME</Text>
+              <View style={s.timePreviewRow}>
+                <Text style={s.timePreviewDigits}>{String(timeHour).padStart(2, "0")}</Text>
+                <Text style={s.timePreviewColon}>:</Text>
+                <Text style={s.timePreviewDigits}>{String(timeMinute).padStart(2, "0")}</Text>
+                <View style={s.timePreviewPeriod}><Text style={s.timePreviewPeriodText}>{timePeriod}</Text></View>
+              </View>
+            </LinearGradient>
+
+            <View style={s.timePickerLabels}>
+              <Text style={s.timeColumnLabel}>HOUR</Text>
+              <Text style={s.timeColumnLabel}>MINUTE</Text>
+              <Text style={s.timeColumnLabel}>PERIOD</Text>
+            </View>
+            <View style={s.timePickerColumns}>
+              <ScrollView style={s.timeScrollColumn} contentContainerStyle={s.timeScrollContent} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+                {Array.from({ length: 12 }, (_, index) => index + 1).map((hour) => (
+                  <TouchableOpacity key={hour} style={[s.timeOption, timeHour === hour && s.timeOptionSelected]} onPress={() => setTimeHour(hour)} accessibilityRole="button" accessibilityState={{ selected: timeHour === hour }}>
+                    <Text style={[s.timeOptionText, timeHour === hour && s.timeOptionTextSelected]}>{String(hour).padStart(2, "0")}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <ScrollView style={s.timeScrollColumn} contentContainerStyle={s.timeScrollContent} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+                {Array.from({ length: 60 }, (_, minute) => minute).map((minute) => (
+                  <TouchableOpacity key={minute} style={[s.timeOption, timeMinute === minute && s.timeOptionSelected]} onPress={() => setTimeMinute(minute)} accessibilityRole="button" accessibilityState={{ selected: timeMinute === minute }}>
+                    <Text style={[s.timeOptionText, timeMinute === minute && s.timeOptionTextSelected]}>{String(minute).padStart(2, "0")}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <View style={s.periodColumn}>
+                {(["AM", "PM"] as const).map((period) => (
+                  <TouchableOpacity key={period} style={[s.periodOption, timePeriod === period && s.periodOptionSelected]} onPress={() => setTimePeriod(period)} accessibilityRole="button" accessibilityState={{ selected: timePeriod === period }}>
+                    <Text style={[s.periodOptionText, timePeriod === period && s.periodOptionTextSelected]}>{period}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            <Text style={s.timeHelper}>Scroll or tap to set the hour and minute.</Text>
             <View style={s.modalActions}>
               <TouchableOpacity style={[s.modalAction, s.modalCancel]} onPress={() => setPickerKind(null)}><Text style={s.modalCancelText}>Cancel</Text></TouchableOpacity>
-              <TouchableOpacity style={[s.modalAction, s.modalConfirm]} onPress={commitPicker}><Text style={s.modalConfirmText}>Confirm</Text></TouchableOpacity>
+              <TouchableOpacity style={[s.modalAction, s.modalConfirm]} onPress={commitPicker}><Text style={s.modalConfirmText}>Confirm time</Text></TouchableOpacity>
             </View>
           </View>
         </View>
@@ -1128,7 +1386,12 @@ export default function ExamScreens({
           />
         }
       >
-        <View style={s.hero}>
+        <LinearGradient
+          colors={[C.blue, C.purpleDark, C.purple]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={s.hero}
+        >
           <View style={s.heroIcon}>
             <Feather name="clipboard" size={25} color={C.white} />
           </View>
@@ -1156,7 +1419,7 @@ export default function ExamScreens({
               <Text style={s.statLabel}>With marks</Text>
             </View>
           </View>
-        </View>
+        </LinearGradient>
         {error ? <Text style={s.error}>{error}</Text> : null}
         {exams.length === 0 ? (
           <View style={s.empty}>
@@ -1526,13 +1789,18 @@ export default function ExamScreens({
           />
         }
       >
-        <View style={s.heroCompact}>
+        <LinearGradient
+          colors={[C.blue, C.purpleDark, C.purple]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={s.heroCompact}
+        >
           <Text style={s.heroTitle}>Enter student marks</Text>
           <Text style={s.heroText}>
             Absent students are automatically assigned zero marks and their
             score field is locked.
           </Text>
-        </View>
+        </LinearGradient>
         <Field label="Subject">
           <View style={s.choices}>
             {/* Subject labels loaded directly from the exam */}
@@ -1662,7 +1930,12 @@ export default function ExamScreens({
           </TouchableOpacity>
         </View>
       ) : null}
-      <View style={s.hero}>
+      <LinearGradient
+        colors={[C.blue, C.purpleDark, C.purple]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={s.hero}
+      >
         <View style={s.heroIcon}>
           <Feather name="file-text" size={25} color={C.white} />
         </View>
@@ -1672,7 +1945,7 @@ export default function ExamScreens({
           this exam's class. Saved marks are included; unentered marks show as a
           dash.
         </Text>
-      </View>
+      </LinearGradient>
       <View style={s.panel}>
         <Text style={s.sectionTitle}>Included in the PDF</Text>
         {[
@@ -1732,11 +2005,71 @@ const s = StyleSheet.create({
   modalConfirm: { backgroundColor: C.blue },
   modalCancelText: { color: C.navy, fontWeight: "800" },
   modalConfirmText: { color: C.white, fontWeight: "800" },
+  timeModalCard: { width: "100%", maxWidth: 430, maxHeight: "92%", backgroundColor: C.white, borderRadius: 24, padding: 18, borderWidth: 1, borderColor: C.border },
+  timeHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 15 },
+  timeTitle: { color: C.navy, fontSize: 19, fontWeight: "900", marginTop: 3 },
+  timeIconBubble: { width: 42, height: 42, borderRadius: 14, backgroundColor: C.pale, alignItems: "center", justifyContent: "center" },
+  timePreview: { borderRadius: 18, paddingVertical: 17, paddingHorizontal: 16, alignItems: "center", marginBottom: 18 },
+  timePreviewLabel: { color: "#E7DCFF", fontSize: 10, fontWeight: "900", letterSpacing: 1.4, marginBottom: 5 },
+  timePreviewRow: { flexDirection: "row", alignItems: "center", justifyContent: "center" },
+  timePreviewDigits: { color: C.white, fontSize: 42, fontWeight: "900", fontVariant: ["tabular-nums"] },
+  timePreviewColon: { color: "#D8C5FF", fontSize: 38, fontWeight: "700", marginHorizontal: 2, marginBottom: 4 },
+  timePreviewPeriod: { backgroundColor: "rgba(255,255,255,0.18)", borderRadius: 9, paddingHorizontal: 9, paddingVertical: 7, marginLeft: 9 },
+  timePreviewPeriodText: { color: C.white, fontWeight: "900", fontSize: 13 },
+  timePickerLabels: { flexDirection: "row", gap: 8, marginBottom: 7 },
+  timeColumnLabel: { flex: 1, textAlign: "center", color: C.muted, fontSize: 10, fontWeight: "900", letterSpacing: 1 },
+  timePickerColumns: { flexDirection: "row", gap: 8, height: 208 },
+  timeScrollColumn: { flex: 1, borderWidth: 1, borderColor: C.border, backgroundColor: "#FCFBFF", borderRadius: 14 },
+  timeScrollContent: { padding: 5, gap: 4 },
+  timeOption: { minHeight: 34, borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  timeOptionSelected: { backgroundColor: C.blue },
+  timeOptionText: { color: C.text, fontSize: 14, fontWeight: "700" },
+  timeOptionTextSelected: { color: C.white, fontWeight: "900" },
+  periodColumn: { flex: 0.85, gap: 8, justifyContent: "center" },
+  periodOption: { minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center", backgroundColor: "#FCFBFF" },
+  periodOptionSelected: { backgroundColor: C.pale, borderColor: C.blue },
+  periodOptionText: { color: C.muted, fontSize: 14, fontWeight: "800" },
+  periodOptionTextSelected: { color: C.blue, fontWeight: "900" },
+  timeHelper: { textAlign: "center", color: C.muted, fontSize: 11, marginTop: 10 },
+  calendarModalCard: { width: "100%", maxWidth: 430, maxHeight: "92%", backgroundColor: C.white, borderRadius: 22, padding: 16, borderWidth: 1, borderColor: C.border },
+  calendarTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
+  calendarEyebrow: { color: C.blue, fontSize: 10, letterSpacing: 1.1, fontWeight: "900", marginBottom: 4 },
+  calendarHint: { color: C.muted, fontSize: 13, fontWeight: "600" },
+  todayButton: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: C.pale, borderRadius: 12, paddingHorizontal: 11, paddingVertical: 8 },
+  todayButtonText: { color: C.blue, fontSize: 12, fontWeight: "900" },
+  monthRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 7, marginBottom: 10 },
+  monthArrow: { width: 38, height: 38, borderRadius: 12, backgroundColor: "#F6F2FF", alignItems: "center", justifyContent: "center" },
+  monthTitleButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 12, backgroundColor: C.pale },
+  monthTitle: { color: C.navy, fontSize: 14, fontWeight: "900" },
+  yearPickerPanel: { borderWidth: 1, borderColor: "#E9E0FF", borderRadius: 15, backgroundColor: "#FCFBFF", padding: 10 },
+  yearPickerTitle: { color: C.navy, fontSize: 13, fontWeight: "900", marginBottom: 6, paddingHorizontal: 6 },
+  yearList: { maxHeight: 300 },
+  yearListContent: { paddingBottom: 4 },
+  yearOption: { minHeight: 44, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: "#F0ECF8", flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderRadius: 10 },
+  yearOptionActive: { backgroundColor: "#F0E8FF" },
+  yearOptionText: { color: C.text, fontSize: 14, fontWeight: "600" },
+  yearOptionTextActive: { color: C.blue, fontWeight: "900" },
+  calendarGrid: { flexDirection: "row", flexWrap: "wrap" },
+  weekday: { width: "14.285%", textAlign: "center", color: "#96AAB9", fontWeight: "900", paddingVertical: 10 },
+  dayCell: { width: "14.285%", aspectRatio: 1, alignItems: "center", justifyContent: "center", borderRadius: 13, marginVertical: 1 },
+  dayCellSelected: { backgroundColor: C.blue },
+  dayCellToday: { borderWidth: 1.5, borderColor: "#C4B5FD" },
+  dayCellDisabled: { opacity: 0.35 },
+  dayText: { color: C.text, fontSize: 14, fontWeight: "700" },
+  dayTextSelected: { color: C.white, fontWeight: "900" },
+  dayTextToday: { color: C.blue, fontWeight: "900" },
+  dayTextDisabled: { color: "#AAB2C0" },
+  calendarFooter: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderTopWidth: 1, borderTopColor: C.border, marginTop: 10, paddingTop: 12 },
+  legendDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#C4B5FD" },
+  legendDotSelected: { backgroundColor: C.blue, marginLeft: 10 },
+  calendarFooterText: { color: C.muted, fontSize: 11, fontWeight: "700" },
+  calendarCancel: { minHeight: 44, marginTop: 12, borderRadius: 12, backgroundColor: C.pale, alignItems: "center", justifyContent: "center" },
+  calendarCancelText: { color: C.navy, fontWeight: "900" },
   durationOption: { minHeight: 46, borderRadius: 10, borderWidth: 1, borderColor: C.border, paddingHorizontal: 12, marginTop: 7, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   durationOptionSelected: { borderColor: C.blue, backgroundColor: C.pale },
   durationOptionText: { color: C.text, fontWeight: "700" },
   durationOptionTextSelected: { color: C.blue, fontWeight: "900" },
-  pdfReadyCard: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: C.white, borderWidth: 1, borderColor: C.border, borderRadius: 14, padding: 14, marginBottom: 14 },
+  pdfReadyCard: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: C.white, borderWidth: 1, borderColor: C.border, borderRadius: 16, padding: 14, marginBottom: 14, shadowColor: "#321064", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 1 },
   pdfReadyTitle: { color: C.navy, fontWeight: "900", fontSize: 14 },
   smallAction: { backgroundColor: C.pale, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 9 },
   smallActionText: { color: C.blue, fontWeight: "900" },
@@ -1783,14 +2116,14 @@ const s = StyleSheet.create({
     gap: 12,
   },
   hero: {
-    backgroundColor: C.navy,
+    backgroundColor: C.blue,
     borderRadius: 24,
     padding: 20,
     gap: 8,
     overflow: "hidden",
   },
   heroCompact: {
-    backgroundColor: C.navy,
+    backgroundColor: C.blue,
     borderRadius: 20,
     padding: 18,
     gap: 7,
@@ -1843,6 +2176,11 @@ const s = StyleSheet.create({
     borderColor: C.border,
     padding: 16,
     gap: 9,
+    shadowColor: "#321064",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.045,
+    shadowRadius: 10,
+    elevation: 2,
   },
   examTop: {
     flexDirection: "row",
@@ -1861,7 +2199,7 @@ const s = StyleSheet.create({
   classLabel: { fontSize: 13, color: C.muted },
   subjectWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   subjectPill: {
-    backgroundColor: "#F5F7FA",
+    backgroundColor: "#F4F0FC",
     borderRadius: 9,
     paddingHorizontal: 8,
     paddingVertical: 6,
@@ -1933,6 +2271,11 @@ const s = StyleSheet.create({
     borderColor: C.border,
     padding: 16,
     gap: 14,
+    shadowColor: "#321064",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.035,
+    shadowRadius: 9,
+    elevation: 1,
   },
   field: { gap: 7 },
   label: { fontSize: 12, fontWeight: "900", color: C.text },
@@ -2011,7 +2354,7 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#F7F9FC",
+    backgroundColor: "#F8F5FF",
     borderRadius: 11,
     padding: 10,
   },
@@ -2022,6 +2365,11 @@ const s = StyleSheet.create({
     borderColor: C.border,
     borderRadius: 18,
     padding: 13,
+    shadowColor: "#321064",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.035,
+    shadowRadius: 8,
+    elevation: 1,
     flexDirection: "row",
     gap: 11,
   },

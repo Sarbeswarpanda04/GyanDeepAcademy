@@ -10,26 +10,33 @@ import {
   Pressable,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { supabase } from "../../lib/supabase";
 
-const NAVY = "#202F42";
-const BG = "#F1F5F8";
+const NAVY = "#241344";
+const PURPLE = "#611CD0";
+const PURPLE_DARK = "#44109D";
+const PURPLE_BRIGHT = "#4C02F7";
+const BG = "#F3F3FF";
 const WHITE = "#FFFFFF";
-const MUTED = "#718393";
+const MUTED = "#718096";
 const GREEN = "#15966A";
 const RED = "#D9535D";
-const BORDER = "#E3EAF0";
-const PURPLE = "#7957C8";
+const BORDER = "#E8E3F5";
+const LAVENDER = "#EDE7FF";
 
 type StaffPayout = {
   id: string;
+  institute_id?: string;
+  staff_id?: string;
   amount: number | string | null;
   paid_date: string;
   period_start: string | null;
   period_end: string | null;
-  note: string | null;
-  payment_method: string | null;
+  // These columns are optional because the payout table may not contain them.
+  note?: string | null;
+  payment_method?: string | null;
   proof_image_path?: string | null;
 };
 
@@ -121,142 +128,200 @@ export default function MySalaryScreen() {
     () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   );
 
+
   const loadSalary = useCallback(async () => {
     setErrorMessage("");
+
     try {
       const {
         data: { user },
         error: authError,
       } = await supabase.auth.getUser();
+
       if (authError) throw authError;
+
       if (!user) {
-        router.replace("/teacher/teacher-login" as never);
         setStaff(null);
         setPayouts([]);
+        setAttendance([]);
         setTeacherName("My Salary");
         setErrorMessage("Your session has expired. Please sign in again.");
+        router.replace("/teacher/teacher-login" as never);
         return;
       }
 
-      // The authenticated teacher's own active team membership determines the institute.
-      const { data: membership, error: membershipError } = await supabase
+      // Find the authenticated teacher's active membership.
+      const { data: memberships, error: membershipError } = await supabase
         .from("institute_team_members")
         .select("*")
         .eq("user_id", user.id)
-        .eq("role", "teacher")
-        .eq("is_active", true)
-        .maybeSingle();
+        .eq("is_active", true);
+
       if (membershipError) throw membershipError;
+
+      const membership = (memberships ?? []).find(
+        (item) => String(item.role ?? "").trim().toLowerCase() === "teacher"
+      );
+
       if (!membership?.institute_id) {
-        throw new Error("No active teacher profile is linked to this login.");
+        throw new Error(
+          "No active teacher membership was found for this account."
+        );
       }
 
-      // Resolve the staff record through a stored staff ID when available.
-      // If the team membership schema does not contain one, match the authenticated
-      // account's phone to the staff phone within the same institute.
       const member = membership as Record<string, unknown>;
-      const linkedStaffId =
-        member.staff_id ?? member.institute_staff_id ?? member.teacher_id;
-      let staffQuery = supabase
-        .from("institute_staff")
-        .select("id,institute_id,full_name,salary_type,salary_amount,weekly_holidays")
-        .eq("institute_id", String(membership.institute_id));
+      const instituteId = String(membership.institute_id);
 
-      if (typeof linkedStaffId === "string" && linkedStaffId.length > 0) {
-        staffQuery = staffQuery.eq("id", linkedStaffId);
-      } else {
-        const memberPhone = String(member.phone ?? user.phone ?? "")
-          .replace(/\D/g, "")
-          .slice(-10);
-        if (!memberPhone) {
-          throw new Error(
-            "Your login is active, but it is not linked to a staff record. Ask the institute owner to link your teacher account to your staff profile.",
+      // Load staff profiles for this institute. Normalize phone numbers
+      // locally so values like +91 9876543210 match 9876543210.
+      const { data: staffRows, error: staffRowsError } = await supabase
+        .from("institute_staff")
+        .select(
+          "id,institute_id,full_name,phone,salary_type,salary_amount,weekly_holidays"
+        )
+        .eq("institute_id", instituteId);
+
+      if (staffRowsError) throw staffRowsError;
+
+      const staffList = staffRows ?? [];
+
+      const linkedStaffId = String(
+        member.staff_id ??
+          member.institute_staff_id ??
+          member.teacher_id ??
+          ""
+      ).trim();
+
+      let staffProfile = linkedStaffId
+        ? staffList.find((item) => String(item.id) === linkedStaffId)
+        : undefined;
+
+      // Fall back to normalized phone matching if the stored ID is absent
+      // or does not resolve to a staff profile in this institute.
+      if (!staffProfile) {
+        const normalizePhone = (value: unknown) =>
+          String(value ?? "").replace(/\D/g, "").slice(-10);
+
+        const memberPhone = normalizePhone(member.phone || user.phone);
+
+        if (memberPhone) {
+          staffProfile = staffList.find(
+            (item) => normalizePhone(item.phone) === memberPhone
           );
         }
-        const { data: matchedStaff, error: staffMatchError } = await staffQuery
-          .eq("phone", memberPhone)
-          .maybeSingle();
-        if (staffMatchError) throw staffMatchError;
-        if (!matchedStaff) {
-          throw new Error(
-            "No staff profile matches your registered mobile number. Ask the institute owner to verify your teacher profile.",
-          );
-        }
-        setStaff(matchedStaff as StaffProfile);
-        setTeacherName(String(matchedStaff.full_name || "My Salary"));
-        const now = new Date();
-        const start = dateOnly(new Date(now.getFullYear(), now.getMonth(), 1));
-        const end = dateOnly(new Date(now.getFullYear(), now.getMonth() + 1, 0));
-        const { data: attendanceRows, error: attendanceError } = await supabase
-          .from("staff_attendance")
-          .select("id,staff_id,institute_id,attendance_date,status,sessions,wage_amount")
-          .eq("institute_id", String(membership.institute_id))
-          .eq("staff_id", String(matchedStaff.id))
-          .gte("attendance_date", start)
-          .lte("attendance_date", end);
-        if (attendanceError) throw attendanceError;
-        setAttendance((attendanceRows ?? []) as StaffAttendance[]);
-        const { data: rows, error: payoutError } = await supabase
-          .from("staff_payouts")
-          .select(
-            "id,amount,paid_date,period_start,period_end,note,payment_method,proof_image_path",
-          )
-          .eq("institute_id", String(membership.institute_id))
-          .eq("staff_id", String(matchedStaff.id))
-          .order("period_start", { ascending: false })
-          .order("paid_date", { ascending: false });
-        if (payoutError) throw payoutError;
-        setPayouts((rows ?? []) as StaffPayout[]);
-        return;
       }
 
-      const { data: staffProfile, error: staffError } =
-        await staffQuery.maybeSingle();
-      if (staffError) throw staffError;
       if (!staffProfile) {
         throw new Error(
-          "Your teacher login is not linked to a staff profile. Ask the institute owner to connect the account to the correct staff record.",
+          "Your login could not be matched to a staff profile. Check the teacher's staff ID or registered phone number in the institute team settings."
         );
       }
 
       setStaff(staffProfile as StaffProfile);
       setTeacherName(String(staffProfile.full_name || "My Salary"));
+
+      console.log("[MySalary] salary configuration", {
+        staffId: staffProfile.id,
+        salaryType: staffProfile.salary_type ?? null,
+        salaryAmount: staffProfile.salary_amount ?? null,
+        weeklyHolidays: staffProfile.weekly_holidays ?? [],
+      });
+
+      const staffId = String(staffProfile.id);
+
+      // Fetch payouts for this authenticated teacher only.
+      // Select only columns confirmed by the supplied staff_payouts record.
+      // Selecting optional columns that do not exist in Supabase causes the
+      // entire query to fail, which previously made all payout totals appear 0.
+      const { data: payoutRows, error: payoutError } = await supabase
+        .from("staff_payouts")
+        .select("id,institute_id,staff_id,amount,paid_date,period_start,period_end")
+        .eq("institute_id", instituteId)
+        .eq("staff_id", staffId)
+        .order("paid_date", { ascending: false });
+
+      console.log("[MySalary] teacher payout lookup", {
+        instituteId,
+        staffId,
+        payoutCount: payoutRows?.length ?? 0,
+        payoutError: payoutError?.message ?? null,
+      });
+
+      if (payoutError) throw payoutError;
+
+      setPayouts((payoutRows ?? []) as StaffPayout[]);
+
+      // Fetch attendance for the current month.
       const now = new Date();
       const start = dateOnly(new Date(now.getFullYear(), now.getMonth(), 1));
       const end = dateOnly(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+
       const { data: attendanceRows, error: attendanceError } = await supabase
         .from("staff_attendance")
-        .select("id,staff_id,institute_id,attendance_date,status,sessions,wage_amount")
-        .eq("institute_id", String(membership.institute_id))
-        .eq("staff_id", String(staffProfile.id))
+        .select(
+          "id,staff_id,institute_id,attendance_date,status,sessions,wage_amount"
+        )
+        .eq("institute_id", instituteId)
+        .eq("staff_id", staffId)
         .gte("attendance_date", start)
         .lte("attendance_date", end);
-      if (attendanceError) throw attendanceError;
-      setAttendance((attendanceRows ?? []) as StaffAttendance[]);
-      const { data: rows, error: payoutError } = await supabase
-        .from("staff_payouts")
-        .select(
-          "id,amount,paid_date,period_start,period_end,note,payment_method,proof_image_path",
-        )
-        .eq("institute_id", String(membership.institute_id))
-        .eq("staff_id", String(staffProfile.id))
-        .order("period_start", { ascending: false })
-        .order("paid_date", { ascending: false });
-      if (payoutError) throw payoutError;
-      setPayouts((rows ?? []) as StaffPayout[]);
+
+      // A successful query returning zero rows can mean RLS is hiding rows.
+      // The SQL policy in mysalary_attendance_rls.sql must allow this teacher
+      // to SELECT their own institute/staff attendance records. Client filters
+      // alone cannot bypass Supabase Row Level Security.
+
+      if (attendanceError) {
+        // Attendance is used for the estimate, but an attendance-query failure
+        // must not erase payout totals that were already loaded successfully.
+        console.error("[MySalary] attendance lookup failed", attendanceError);
+        setAttendance([]);
+        setErrorMessage(
+          `Salary payments loaded, but attendance could not be loaded: ${attendanceError.message}`
+        );
+      } else {
+        console.log("[MySalary] attendance lookup", {
+          staffId,
+          start,
+          end,
+          attendanceCount: attendanceRows?.length ?? 0,
+          instituteId,
+          statuses: (attendanceRows ?? []).map((row) => ({
+            id: row.id,
+            instituteId: row.institute_id,
+            staffId: row.staff_id,
+            date: row.attendance_date,
+            status: row.status,
+            sessions: row.sessions ?? [],
+            wageAmount: row.wage_amount ?? null,
+          })),
+        });
+
+        setAttendance((attendanceRows ?? []) as StaffAttendance[]);
+      }
     } catch (error: unknown) {
+      // Avoid showing stale salary information if this teacher's request fails.
+      setPayouts([]);
+      setAttendance([]);
       const details = error as {
         message?: string;
         details?: string;
         hint?: string;
         code?: string;
       } | null;
+
       const message =
         error instanceof Error
           ? error.message
-          : [details?.message, details?.details, details?.hint, details?.code]
+          : [
+              details?.message,
+              details?.details,
+              details?.hint,
+              details?.code,
+            ]
               .filter(Boolean)
               .join("\n") || "Could not load your salary records.";
+
       console.error("My salary load failed:", error);
       setErrorMessage(message);
     } finally {
@@ -264,6 +329,7 @@ export default function MySalaryScreen() {
       setRefreshing(false);
     }
   }, []);
+
 
   useFocusEffect(
     useCallback(() => {
@@ -315,58 +381,77 @@ export default function MySalaryScreen() {
     return [...unique.values()];
   }, [attendance, currentMonth]);
 
-  const salaryEstimate = useMemo(() => {
-    if (!staff) return { amount: 0, paidDays: 0, absentDays: 0, sessions: 0 };
+ 
+const salaryEstimate = useMemo(() => {
+    if (!staff) {
+      return { amount: 0, paidDays: 0, absentDays: 0, sessions: 0 };
+    }
+
     const rows = thisMonthAttendance;
+    const salaryType = String(staff.salary_type ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/[\\s-]+/g, "_");
+    const salaryAmount = Math.max(0, numeric(staff.salary_amount));
+    const daysInMonth = new Date(
+      new Date().getFullYear(),
+      new Date().getMonth() + 1,
+      0,
+    ).getDate();
+
     let paidDays = 0;
     let absentDays = 0;
     let sessions = 0;
+    let earnedAmount = 0;
+
+    // Match the owner-side Teacher Details > Payable calculation:
+    // only a PRESENT attendance record with at least one saved session earns pay.
     for (const row of rows) {
-      const status = String(row.status || "").toLowerCase();
+      const status = String(row.status ?? "").trim().toLowerCase();
       const selectedSessions = Array.isArray(row.sessions) ? row.sessions : [];
-      if (status === "absent") absentDays++;
-      else if (status === "holiday") continue;
-      else if (selectedSessions.length > 0) {
-        paidDays += 1;
-        sessions += selectedSessions.length;
-      } else if (["present", "late", "half_day"].includes(status)) {
-        const fraction = status === "half_day" ? 0.5 : 1;
-        paidDays += fraction;
-        sessions += fraction;
+
+      if (status === "absent") {
+        absentDays += 1;
+      }
+
+      if (status !== "present" || selectedSessions.length === 0) {
+        continue;
+      }
+
+      paidDays += 1;
+      sessions += selectedSessions.length;
+
+      if (["batch", "per_batch", "per_session", "session", "per_class", "class"].includes(salaryType)) {
+        earnedAmount += selectedSessions.length * salaryAmount;
+      } else if (["daily", "per_day", "daily_salary"].includes(salaryType)) {
+        earnedAmount += salaryAmount;
+      } else {
+        // This mirrors the owner screen's monthly calculation:
+        // monthly salary is prorated by calendar days for each paid attendance day.
+        earnedAmount += salaryAmount / Math.max(1, daysInMonth);
       }
     }
 
-    const savedWages = rows.filter((row) =>
-      row.wage_amount !== null && row.wage_amount !== undefined &&
-      Number.isFinite(Number(row.wage_amount))
-    );
-    let amount = 0;
-    if (savedWages.length > 0) {
-      amount = savedWages.reduce((sum, row) => sum + Math.max(0, numeric(row.wage_amount)), 0);
-    } else if (staff.salary_type === "monthly") {
-      const holidays = new Set((staff.weekly_holidays ?? []).map((day) => day.toLowerCase()));
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = now.getMonth();
-      const totalDays = new Date(year, month + 1, 0).getDate();
-      let workingDays = 0;
-      for (let day = 1; day <= totalDays; day++) {
-        const weekday = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][new Date(year, month, day).getDay()];
-        if (!holidays.has(weekday) && !holidays.has(weekday.slice(0, 3))) workingDays++;
-      }
-      amount = numeric(staff.salary_amount) * (paidDays / Math.max(1, workingDays));
-    } else if (staff.salary_type === "daily") {
-      amount = numeric(staff.salary_amount) * paidDays;
-    } else {
-      amount = numeric(staff.salary_amount) * sessions;
-    }
-    return { amount: Math.round(amount * 100) / 100, paidDays, absentDays, sessions };
+    return {
+      amount: Math.round(earnedAmount * 100) / 100,
+      paidDays,
+      absentDays,
+      sessions,
+    };
   }, [staff, thisMonthAttendance]);
 
   const paidThisMonth = payouts
-    .filter((row) => (row.period_start?.slice(0, 7) || row.paid_date?.slice(0, 7)) === currentMonth)
+    .filter(
+      (row) =>
+        (row.period_start?.slice(0, 7) || row.paid_date?.slice(0, 7)) ===
+        currentMonth
+    )
     .reduce((sum, row) => sum + numeric(row.amount), 0);
+
+  // "You may receive" is the outstanding payable amount, matching the owner
+  // screen: attendance-earned salary minus payouts already recorded this month.
   const remainingEstimate = Math.max(0, salaryEstimate.amount - paidThisMonth);
+  const payableThisMonth = remainingEstimate;
   const isCurrentMonth = currentMonthKey === monthKey(new Date());
   const futureMonth =
     selectedMonth.getTime() >
@@ -389,7 +474,12 @@ export default function MySalaryScreen() {
           />
         }
       >
-        <View style={styles.hero}>
+        <LinearGradient
+          colors={[PURPLE, PURPLE_DARK, PURPLE_BRIGHT]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.hero}
+        >
           <View style={styles.headerRow}>
             <Pressable
               onPress={() => router.back()}
@@ -425,13 +515,13 @@ export default function MySalaryScreen() {
               </Text>
             )}
             <View style={styles.totalFooter}>
-              <Feather name="shield" size={24} color="#000" />
+              <Feather name="shield" size={19} color="#E9DDFF" />
               <Text style={styles.totalFooterText}>
                 Your own recorded salary payments
               </Text>
             </View>
           </View>
-        </View>
+        </LinearGradient>
 
         <View style={styles.body}>
           <View style={styles.estimateCard}>
@@ -449,7 +539,7 @@ export default function MySalaryScreen() {
               <ActivityIndicator color={GREEN} style={{ marginTop: 14, alignSelf: "flex-start" }} />
             ) : (
               <>
-                <Text style={styles.estimateAmount}>{money(salaryEstimate.amount)}</Text>
+                <Text style={styles.estimateAmount}>{money(payableThisMonth)}</Text>
                 <View style={styles.estimateStats}>
                   <View style={styles.estimateStat}>
                     <Text style={styles.estimateStatLabel}>Paid days</Text>
@@ -470,7 +560,7 @@ export default function MySalaryScreen() {
                 </View>
               </>
             )}
-            <Text style={styles.estimateNote}>Estimate based on recorded attendance and your salary type. Final payment may differ if attendance or salary records are updated.</Text>
+            <Text style={styles.estimateNote}>Calculated like the institute's payable amount: eligible present sessions are priced using your saved salary type and rate, then recorded payments for this month are deducted.</Text>
           </View>
 
           {!!errorMessage && (
@@ -656,8 +746,8 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: BG },
   content: { paddingBottom: 34 },
   hero: {
-    backgroundColor: NAVY,
-    paddingTop: 16,
+    backgroundColor: PURPLE,
+    paddingTop: 35,
     paddingHorizontal: 18,
     paddingBottom: 26,
     borderBottomLeftRadius: 28,
@@ -674,13 +764,13 @@ const styles = StyleSheet.create({
   },
   headerCopy: { flex: 1 },
   eyebrow: {
-    color: "#B9C9DA",
+    color: "#E9DDFF",
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 1.5,
   },
   title: { color: WHITE, fontSize: 27, fontWeight: "900", marginTop: 2 },
-  subtitle: { color: "#D0DCE8", fontSize: 12, marginTop: 3 },
+  subtitle: { color: "#F0EAFE", fontSize: 12, marginTop: 3 },
   headerIcon: {
     width: 43,
     height: 43,
@@ -693,12 +783,12 @@ const styles = StyleSheet.create({
     marginTop: 22,
     padding: 19,
     borderRadius: 22,
-    backgroundColor: "#294361",
+    backgroundColor: "rgba(255,255,255,0.13)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: "rgba(255,255,255,0.22)",
   },
   totalLabel: {
-    color: "#D0DCE8",
+    color: "#F0EAFE",
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 1,
@@ -727,7 +817,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#CFECDD",
+    borderColor: "#DCD0FF",
     marginBottom: 16,
   },
   estimateTopRow: { flexDirection: "row", alignItems: "center", gap: 10 },
@@ -779,7 +869,7 @@ const styles = StyleSheet.create({
     width: 39,
     height: 39,
     borderRadius: 13,
-    backgroundColor: "#F0E9FF",
+    backgroundColor: LAVENDER,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -791,7 +881,7 @@ const styles = StyleSheet.create({
     marginTop: 17,
     padding: 10,
     borderRadius: 15,
-    backgroundColor: "#F5F7FA",
+    backgroundColor: "#F8F6FF",
   },
   monthArrow: {
     width: 39,
@@ -819,6 +909,7 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
     borderRadius: 16,
     padding: 12,
+    backgroundColor: "#FCFBFF",
     minWidth: 0,
   },
   metricIcon: {

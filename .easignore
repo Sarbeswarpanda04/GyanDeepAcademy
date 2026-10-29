@@ -1,0 +1,49 @@
+
+# Dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native build outputs and caches
+.kotlin/
+*.orig.*
+*.hprof
+*.apk
+*.aab
+
+# Signing credentials - never commit these
+*.jks
+*.keystore
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# Metro
+.metro-health-check*
+
+# Debug logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# TypeScript
+*.tsbuildinfo
+
+# Generated native folders
+# Keep /android tracked because it contains your native configuration.
+# Ignore /ios only if you do not need to preserve its native project.
+ /ios

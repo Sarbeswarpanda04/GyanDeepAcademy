@@ -1,8 +1,8 @@
-
 import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  Linking,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -17,12 +17,14 @@ import { router, useFocusEffect } from "expo-router";
 import { supabase } from "../lib/supabase";
 import AppAlert, { AppAlertType } from "../components/AppAlert";
 
-const NAVY = "#202F42";
-const BG = "#F1F5F8";
-const MUTED = "#78909F";
-const BORDER = "#DDE5EC";
+const NAVY = "#32106B";
+const PURPLE = "#6D28D9";
+const BG = "#F5F3FF";
+const MUTED = "#7B8498";
+const BORDER = "#E8E2F4";
 const WHITE = "#FFFFFF";
-const GREEN = "#397D40";
+const GREEN = "#16804A";
+const WHATSAPP = "#168A52";
 
 type Staff = {
   id: string;
@@ -38,8 +40,7 @@ type Staff = {
   photo_url?: string | null;
 };
 
-const money = (n: number) =>
-  `₹${Number(n || 0).toLocaleString("en-IN")}`;
+const money = (n: number) => `₹${Number(n || 0).toLocaleString("en-IN")}`;
 
 const titleCase = (s: string) =>
   s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
@@ -92,7 +93,7 @@ export default function TeacherScreen() {
       const staffResult = await supabase
         .from("institute_staff")
         .select(
-          "id,full_name,phone,photo_path,staff_type,salary_type,salary_amount,date_of_birth,weekly_holidays,status"
+          "id,full_name,phone,photo_path,staff_type,salary_type,salary_amount,date_of_birth,weekly_holidays,status",
         )
         .eq("institute_id", instituteId)
         .eq("status", "active")
@@ -120,7 +121,7 @@ export default function TeacherScreen() {
             ...person,
             photo_url: data?.signedUrl ?? null,
           };
-        })
+        }),
       );
 
       setRows(staffWithPhotos);
@@ -144,7 +145,7 @@ export default function TeacherScreen() {
     useCallback(() => {
       setLoading(true);
       void load();
-    }, [load])
+    }, [load]),
   );
 
   const filtered = useMemo(() => {
@@ -155,13 +156,13 @@ export default function TeacherScreen() {
     return rows.filter(
       (person) =>
         person.full_name.toLowerCase().includes(search) ||
-        (person.phone ?? "").toLowerCase().includes(search)
+        (person.phone ?? "").toLowerCase().includes(search),
     );
   }, [rows, query]);
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={NAVY} />
+      <StatusBar barStyle="light-content" backgroundColor={PURPLE} />
 
       <View style={styles.top}>
         <View style={styles.heading}>
@@ -264,9 +265,7 @@ export default function TeacherScreen() {
                   <Pressable
                     style={styles.staffHeader}
                     onPress={() =>
-                      router.push(
-                        (`/teacher-details/${item.id}`) as never
-                      )
+                      router.push(`/teacher-details/${item.id}` as never)
                     }
                   >
                     {item.photo_url ? (
@@ -276,18 +275,12 @@ export default function TeacherScreen() {
                       />
                     ) : (
                       <View style={styles.avatarFallback}>
-                        <Feather
-                          name="user"
-                          size={25}
-                          color="#6E8798"
-                        />
+                        <Feather name="user" size={25} color="#6E8798" />
                       </View>
                     )}
 
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.staffName}>
-                        {item.full_name}
-                      </Text>
+                      <Text style={styles.staffName}>{item.full_name}</Text>
 
                       <Text style={styles.staffMeta}>
                         {titleCase(item.staff_type)}
@@ -304,13 +297,52 @@ export default function TeacherScreen() {
                       </Text>
                     </View>
 
-                    <Feather
-                      name="chevron-right"
-                      size={20}
-                      color={MUTED}
-                    />
+                    <Feather name="chevron-right" size={20} color={MUTED} />
                   </Pressable>
 
+                  <View style={styles.contactActions}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Call ${item.full_name}`}
+                      disabled={!item.phone}
+                      onPress={() => {
+                        if (item.phone) {
+                          void Linking.openURL(`tel:${item.phone.replace(/[^+\d]/g, "")}`);
+                        }
+                      }}
+                      style={({ pressed }) => [
+                        styles.contactButton,
+                        styles.callButton,
+                        !item.phone && styles.disabledButton,
+                        pressed && item.phone ? styles.pressedButton : null,
+                      ]}
+                    >
+                      <Feather name="phone" size={16} color={item.phone ? PURPLE : MUTED} />
+                      <Text style={[styles.contactButtonText, { color: item.phone ? PURPLE : MUTED }]}>Call</Text>
+                    </Pressable>
+
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`WhatsApp ${item.full_name}`}
+                      disabled={!item.phone}
+                      onPress={() => {
+                        if (item.phone) {
+                          const digits = item.phone.replace(/\D/g, "");
+                          const internationalNumber = digits.length === 10 ? `91${digits}` : digits;
+                          void Linking.openURL(`https://wa.me/${internationalNumber}`);
+                        }
+                      }}
+                      style={({ pressed }) => [
+                        styles.contactButton,
+                        styles.whatsappButton,
+                        !item.phone && styles.disabledButton,
+                        pressed && item.phone ? styles.pressedButton : null,
+                      ]}
+                    >
+                      <Feather name="message-circle" size={16} color={item.phone ? WHITE : MUTED} />
+                      <Text style={[styles.contactButtonText, { color: item.phone ? WHITE : MUTED }]}>WhatsApp</Text>
+                    </Pressable>
+                  </View>
                 </View>
               );
             })}
@@ -342,205 +374,93 @@ export default function TeacherScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: BG,
-  },
+  screen: { flex: 1, backgroundColor: BG },
   top: {
-    backgroundColor: NAVY,
-    paddingBottom: 20,
+    backgroundColor: PURPLE,
+    paddingBottom: 22,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
   },
   heading: {
     paddingHorizontal: 20,
-    paddingTop: 35,
+    paddingTop: 24,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  title: {
-    fontSize: 30,
-    fontWeight: "800",
-    color: WHITE,
-  },
-  sub: {
-    fontSize: 16,
-    color: "#A7BAC7",
-    marginTop: 4,
-  },
+  title: { fontSize: 30, fontWeight: "800", color: WHITE, letterSpacing: -0.6 },
+  sub: { fontSize: 14, color: "#E5D9FF", marginTop: 5, fontWeight: "500" },
   headerIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 28,
-    backgroundColor: "#30445A",
-    alignItems: "center",
-    justifyContent: "center",
+    width: 50, height: 50, borderRadius: 17, backgroundColor: "rgba(255,255,255,0.16)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.18)",
+    alignItems: "center", justifyContent: "center",
   },
   attendance: {
-    marginHorizontal: 18,
-    marginTop: 22,
-    padding: 5,
-    borderRadius: 24,
-    backgroundColor: "#293B50",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
+    marginHorizontal: 18, marginTop: 22, padding: 12, borderRadius: 20,
+    backgroundColor: "#4D1BA2", flexDirection: "row", alignItems: "center", gap: 13,
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.12)",
   },
   calendar: {
-    width: 64,
-    height: 64,
-    borderRadius: 19,
-    backgroundColor: "#536D84",
-    alignItems: "center",
-    justifyContent: "center",
+    width: 52, height: 52, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.16)",
+    alignItems: "center", justifyContent: "center",
   },
-  attTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: WHITE,
-  },
-  attSub: {
-    fontSize: 14,
-    color: "#A7BAC7",
-    marginTop: 5,
-  },
-  body: {
-    flex: 1,
-    paddingHorizontal: 18,
-    paddingTop: 18,
-  },
-  filterRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 12,
-  },
+  attTitle: { fontSize: 16, fontWeight: "800", color: WHITE },
+  attSub: { fontSize: 12, color: "#E1D4FF", marginTop: 5 },
+  body: { flex: 1, paddingHorizontal: 16, paddingTop: 18 },
+  filterRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14 },
   pill: {
-    backgroundColor: NAVY,
-    borderRadius: 28,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    backgroundColor: "#E9DFFF", borderRadius: 14, paddingHorizontal: 15, paddingVertical: 12,
+    borderWidth: 1, borderColor: "#D8C7FF",
   },
-  pillText: {
-    color: WHITE,
-    fontSize: 16,
-    fontWeight: "800",
-  },
+  pillText: { color: NAVY, fontSize: 14, fontWeight: "800" },
   searchBox: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: WHITE,
-    paddingHorizontal: 12,
+    flex: 1, flexDirection: "row", alignItems: "center", gap: 9, borderRadius: 15,
+    borderWidth: 1, borderColor: BORDER, backgroundColor: WHITE, paddingHorizontal: 13,
+    shadowColor: "#32106B", shadowOpacity: 0.04, shadowRadius: 8, elevation: 1,
   },
-  searchInput: {
-    flex: 1,
-    height: 44,
-    color: NAVY,
-  },
+  searchInput: { flex: 1, height: 46, color: NAVY, fontSize: 14 },
   staffCard: {
-    backgroundColor: WHITE,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 13,
-    marginBottom: 14,
+    backgroundColor: WHITE, borderRadius: 22, borderWidth: 1, borderColor: BORDER,
+    padding: 14, marginBottom: 13, shadowColor: "#32106B", shadowOpacity: 0.06,
+    shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 2,
   },
-  staffHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: BG,
-  },
+  staffHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
+  avatar: { width: 58, height: 58, borderRadius: 19, backgroundColor: BG },
   avatarFallback: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: "#EAF0F4",
-    alignItems: "center",
-    justifyContent: "center",
+    width: 58, height: 58, borderRadius: 19, backgroundColor: "#EEE7FF",
+    alignItems: "center", justifyContent: "center",
   },
-  staffName: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: NAVY,
+  staffName: { fontSize: 16, fontWeight: "800", color: NAVY, letterSpacing: -0.2 },
+  staffMeta: { fontSize: 12, color: MUTED, marginTop: 4 },
+  salary: { fontSize: 13, fontWeight: "800", color: GREEN, marginTop: 7 },
+  contactActions: { flexDirection: "row", gap: 10, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#F0ECF7" },
+  contactButton: {
+    flex: 1, minHeight: 44, borderRadius: 13, flexDirection: "row",
+    alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 10,
   },
-  staffMeta: {
-    fontSize: 12,
-    color: MUTED,
-    marginTop: 4,
-  },
-  salary: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: GREEN,
-    marginTop: 5,
-  },
-  center: {
-    alignItems: "center",
-    paddingTop: 70,
-  },
-  empty: {
-    flexGrow: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 24,
-    paddingTop: 50,
-  },
+  callButton: { backgroundColor: "#F1EAFE", borderWidth: 1, borderColor: "#E3D5FF" },
+  whatsappButton: { backgroundColor: WHATSAPP },
+  contactButtonText: { fontSize: 14, fontWeight: "800" },
+  disabledButton: { backgroundColor: "#F0F1F5", borderColor: "#E5E7EB", opacity: 0.8 },
+  pressedButton: { opacity: 0.75, transform: [{ scale: 0.98 }] },
+  center: { alignItems: "center", paddingTop: 70 },
+  empty: { flexGrow: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24, paddingTop: 50 },
   emptyIcon: {
-    width: 76,
-    height: 76,
-    borderRadius: 25,
-    backgroundColor: "#E4EBF0",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
+    width: 76, height: 76, borderRadius: 25, backgroundColor: "#E9E1FA",
+    alignItems: "center", justifyContent: "center", marginBottom: 16,
   },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: NAVY,
-    textAlign: "center",
-  },
-  emptyText: {
-    fontSize: 14,
-    color: MUTED,
-    textAlign: "center",
-    lineHeight: 21,
-    marginTop: 8,
-  },
+  emptyTitle: { fontSize: 18, fontWeight: "800", color: NAVY, textAlign: "center" },
+  emptyText: { fontSize: 14, color: MUTED, textAlign: "center", lineHeight: 21, marginTop: 8 },
   bottom: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 18,
-    paddingTop: 12,
-    paddingBottom: 12,
-    backgroundColor: WHITE,
-    borderTopWidth: 1,
-    borderTopColor: "#E5EBF0",
+    position: "absolute", bottom: 0, left: 0, right: 0, paddingHorizontal: 18,
+    paddingTop: 12, paddingBottom: 12, backgroundColor: WHITE,
+    borderTopWidth: 1, borderTopColor: BORDER,
   },
   addButton: {
-    height: 64,
-    borderRadius: 22,
-    backgroundColor: NAVY,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
+    height: 56, borderRadius: 17, backgroundColor: PURPLE, flexDirection: "row",
+    alignItems: "center", justifyContent: "center", gap: 10,
+    shadowColor: PURPLE, shadowOpacity: 0.22, shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 }, elevation: 4,
   },
-  addText: {
-    color: WHITE,
-    fontSize: 20,
-    fontWeight: "800",
-  },
+  addText: { color: WHITE, fontSize: 16, fontWeight: "800" },
 });

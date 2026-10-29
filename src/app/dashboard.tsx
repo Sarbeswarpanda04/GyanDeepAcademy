@@ -183,12 +183,14 @@ const INSTITUTE_ACTIONS: Action[] = [
     color: C.blueLight,
     iconColor: C.blue,
   },
-  {
-    title: "Notice board",
-    icon: "volume-2",
+{
+    title: "Notifications",
+    icon: "bell",
+    route: "/notices",
     color: C.purpleLight,
     iconColor: C.purple,
   },
+
   {
     title: "Study material",
     icon: "book-open",
@@ -883,7 +885,12 @@ export default function DashboardScreen() {
 
       {alert ? (
         <View style={styles.alertWrap}>
-          <AppAlert type={alert.type} message={alert.message} />
+          <AppAlert
+  visible={!!alert}
+  title={alert.type === "error" ? "Error" : alert.type === "success" ? "Success" : "Notice"}
+  type={alert.type}
+  message={alert.message}
+/>
         </View>
       ) : null}
 

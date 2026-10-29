@@ -18,15 +18,16 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { supabase } from "../lib/supabase";
 import AppAlert, { type AppAlertType } from "../components/AppAlert";
 
-const NAVY = "#202F42";
-const BG = "#F1F5F8";
-const GREEN = "#397D40";
-const MUTED = "#7D909E";
-const BORDER = "#E4EBF0";
+const NAVY = "#1F2937";
+const BG = "#F3F3FF";
+const GREEN = "#611CD0";
+const MUTED = "#718096";
+const BORDER = "#E8E3F5";
 const WHITE = "#FFFFFF";
 
 type ClassItem = {
@@ -489,21 +490,29 @@ export default function AssignSubjectScreen() {
   if (loading) {
     return (
       <View style={styles.loadingScreen}>
-        <StatusBar barStyle="light-content" backgroundColor={NAVY} />
-        <ActivityIndicator size="large" color={GREEN} />
-        <Text style={styles.loadingText}>
-          Loading classes and subjects…
-        </Text>
+        <StatusBar barStyle="light-content" backgroundColor="#44109D" />
+        <View style={styles.loadingSkeletonWrap}>
+          <View style={styles.skeletonHeader} />
+          <View style={styles.skeletonCard} />
+          <View style={styles.skeletonCard} />
+          <View style={styles.skeletonCard} />
+        </View>
+        <Text style={styles.loadingText}>Preparing subject allocation…</Text>
       </View>
     );
   }
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={NAVY} />
+      <StatusBar barStyle="light-content" backgroundColor="#44109D" />
 
       {/* Header */}
-      <View style={styles.header}>
+      <LinearGradient
+        colors={["#611CD0", "#44109D", "#4C02F7"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
+      >
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
@@ -526,7 +535,7 @@ export default function AssignSubjectScreen() {
         >
           <Feather name="refresh-cw" size={19} color={WHITE} />
         </TouchableOpacity>
-      </View>
+      </LinearGradient>
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -698,7 +707,7 @@ export default function AssignSubjectScreen() {
                   <Feather
                     name="book-open"
                     size={20}
-                    color={isAssigned ? GREEN : "#A57B19"}
+                    color={isAssigned ? GREEN : "#8B5CF6"}
                   />
                 </View>
 
@@ -739,13 +748,13 @@ export default function AssignSubjectScreen() {
                     <Feather
                       name={isAssigned ? "check-circle" : "clock"}
                       size={12}
-                      color={isAssigned ? GREEN : "#947300"}
+                      color={isAssigned ? GREEN : "#7C3AED"}
                     />
                     <Text
                       style={[
                         styles.statusBadgeText,
                         {
-                          color: isAssigned ? GREEN : "#947300",
+                          color: isAssigned ? GREEN : "#7C3AED",
                         },
                       ]}
                     >
@@ -756,7 +765,7 @@ export default function AssignSubjectScreen() {
                   <Feather
                     name="chevron-right"
                     size={20}
-                    color={isAssigned ? GREEN : "#A57B19"}
+                    color={isAssigned ? GREEN : "#8B5CF6"}
                   />
                 </View>
               </TouchableOpacity>
@@ -944,7 +953,7 @@ export default function AssignSubjectScreen() {
                       <Feather
                         name={active ? "check-circle" : "circle"}
                         size={22}
-                        color={active ? GREEN : "#B7C4CC"}
+                        color={active ? GREEN : "#C4B5FD"}
                       />
                     </TouchableOpacity>
                   );
@@ -1049,13 +1058,31 @@ const styles = StyleSheet.create({
     gap: 12,
   },
 
+  loadingSkeletonWrap: {
+    width: "100%",
+    paddingHorizontal: 20,
+    gap: 14,
+  },
+  skeletonHeader: {
+    height: 76,
+    borderRadius: 20,
+    backgroundColor: "#E8DFFF",
+    marginBottom: 8,
+  },
+  skeletonCard: {
+    height: 108,
+    borderRadius: 20,
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
   loadingText: {
     color: MUTED,
     fontSize: 14,
+    marginTop: 14,
   },
 
   header: {
-    backgroundColor: NAVY,
     minHeight: 94,
     paddingTop: 35,
     paddingBottom: 16,
@@ -1063,6 +1090,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    overflow: "hidden",
   },
 
   backButton: {
@@ -1085,7 +1115,7 @@ const styles = StyleSheet.create({
   },
 
   headerSubtitle: {
-    color: "#C8D4DE",
+    color: "#E9DFFF",
     fontSize: 12,
     marginTop: 4,
   },
@@ -1118,7 +1148,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 16,
-    backgroundColor: "#EAF4EE",
+    backgroundColor: "#F0E9FF",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1156,14 +1186,14 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 4,
-    backgroundColor: "#72B987",
+    backgroundColor: "#A78BFA",
   },
 
   legendYellow: {
     width: 12,
     height: 12,
     borderRadius: 4,
-    backgroundColor: "#E4C05C",
+    backgroundColor: "#C4B5FD",
   },
 
   legendText: {
@@ -1215,7 +1245,7 @@ const styles = StyleSheet.create({
   },
 
   classChipCountSelected: {
-    color: "#D5E1E8",
+    color: "#E9DFFF",
   },
 
   subjectHeadingRow: {
@@ -1239,13 +1269,13 @@ const styles = StyleSheet.create({
   },
 
   subjectCardAssigned: {
-    backgroundColor: "#EAF6EE",
-    borderColor: "#B8DEC3",
+    backgroundColor: "#F0E9FF",
+    borderColor: "#D8CCF5",
   },
 
   subjectCardUnassigned: {
-    backgroundColor: "#FFF9EC",
-    borderColor: "#F1E2B8",
+    backgroundColor: "#F7F2FF",
+    borderColor: "#E8DDFB",
   },
 
   subjectCardSelected: {
@@ -1262,11 +1292,11 @@ const styles = StyleSheet.create({
   },
 
   subjectIconAssigned: {
-    backgroundColor: "#D7EEDF",
+    backgroundColor: "#E4D9FF",
   },
 
   subjectIconUnassigned: {
-    backgroundColor: "#FFF0CD",
+    backgroundColor: "#F0E9FF",
   },
 
   subjectCopy: {
@@ -1297,7 +1327,7 @@ const styles = StyleSheet.create({
   },
 
   tapHintUnassigned: {
-    color: "#947300",
+    color: "#7C3AED",
   },
 
   subjectRight: {
@@ -1315,11 +1345,11 @@ const styles = StyleSheet.create({
   },
 
   assignedBadge: {
-    backgroundColor: "#D8EEDF",
+    backgroundColor: "#E4D9FF",
   },
 
   unassignedBadge: {
-    backgroundColor: "#FFF0CD",
+    backgroundColor: "#F0E9FF",
   },
 
   statusBadgeText: {
@@ -1395,7 +1425,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 5,
     borderRadius: 4,
-    backgroundColor: "#D6DEE4",
+    backgroundColor: "#D8CCF5",
     alignSelf: "center",
     marginBottom: 16,
   },
@@ -1435,7 +1465,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 13,
-    backgroundColor: "#F0F3F5",
+    backgroundColor: "#F0E9FF",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1445,9 +1475,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 11,
     padding: 12,
-    backgroundColor: "#F0F7F2",
+    backgroundColor: "#F7F2FF",
     borderWidth: 1,
-    borderColor: "#D8EBDD",
+    borderColor: "#E8DDFB",
     borderRadius: 16,
     marginBottom: 17,
   },
@@ -1456,7 +1486,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 13,
-    backgroundColor: "#DCEFE1",
+    backgroundColor: "#E4D9FF",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1496,7 +1526,7 @@ const styles = StyleSheet.create({
     minHeight: 45,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F3F6F8",
+    backgroundColor: "#F8F7FF",
     borderRadius: 13,
     paddingHorizontal: 12,
     gap: 9,
@@ -1529,13 +1559,13 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#EDF1F4",
+    borderColor: "#E8E3F5",
     backgroundColor: WHITE,
     marginBottom: 7,
   },
 
   teacherOptionSelected: {
-    backgroundColor: "#EAF6EE",
+    backgroundColor: "#F0E9FF",
     borderColor: "#9BCDA8",
   },
 
@@ -1543,13 +1573,13 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: "#EDF1F4",
+    backgroundColor: "#E8E3F5",
     alignItems: "center",
     justifyContent: "center",
   },
 
   teacherAvatarSelected: {
-    backgroundColor: "#CFE8D5",
+    backgroundColor: "#D8CCF5",
   },
 
   teacherAvatarText: {
@@ -1619,14 +1649,14 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingTop: 11,
     borderTopWidth: 1,
-    borderTopColor: "#EDF1F4",
+    borderTopColor: "#E8E3F5",
   },
 
   cancelButton: {
     minHeight: 47,
     paddingHorizontal: 14,
     borderRadius: 13,
-    backgroundColor: "#F0F3F5",
+    backgroundColor: "#F0E9FF",
     alignItems: "center",
     justifyContent: "center",
   },

@@ -1,23 +1,35 @@
 import { useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  ScrollView,
 } from "react-native";
 import { router } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+import { Feather } from "@expo/vector-icons";
 import { supabase } from "../lib/supabase";
 
-const NAVY = "#101C3A";
-const GOLD = "#E8B84A";
+const PURPLE = "#611CD0";
+const PURPLE_DARK = "#44109D";
+const PURPLE_BRIGHT = "#4C02F7";
+const BG = "#F3F3FF";
+const TEXT = "#1F2937";
+const MUTED = "#718096";
+const BORDER = "#E8E3F5";
+const WHITE = "#FFFFFF";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function handleLogin() {
@@ -79,7 +91,6 @@ export default function LoginScreen() {
 
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail);
-
       if (error) throw error;
 
       Alert.alert(
@@ -97,135 +108,424 @@ export default function LoginScreen() {
   }
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.screen}
-      keyboardShouldPersistTaps="handled"
-    >
-      <Text style={styles.brand}>GyanDeep Academy</Text>
-      <Text style={styles.tagline}>LEARN TODAY, LEAD TOMORROW</Text>
+    <View style={styles.root}>
+      <StatusBar barStyle="light-content" backgroundColor={PURPLE_DARK} />
+      <LinearGradient
+        colors={[PURPLE, PURPLE_DARK, PURPLE_BRIGHT]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <View pointerEvents="none" style={styles.orbTop} />
+      <View pointerEvents="none" style={styles.orbBottom} />
 
-      <View style={styles.card}>
-        <Text style={styles.heading}>Welcome Back</Text>
-        <Text style={styles.subtitle}>Sign in to your owner account.</Text>
+      <KeyboardAvoidingView
+        style={styles.keyboard}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <View style={styles.fixedContent}>
+          <View style={styles.brandArea}>
+            <View style={styles.logoBadge}>
+              <Image
+                source={require("../../assets/images/icon.png")}
+                style={styles.logoImage}
+                resizeMode="contain"
+                accessibilityLabel="GyanDeep Academy logo"
+              />
+            </View>
+            <Text style={styles.brand}>GyanDeep Academy</Text>
+            <Text style={styles.tagline}>LEARN TODAY, LEAD TOMORROW</Text>
+            <View style={styles.brandDivider} />
+            <Text style={styles.welcomeLine}>Your learning community,</Text>
+            <Text style={styles.welcomeLineStrong}>all in one place.</Text>
+          </View>
 
-        <Text style={styles.label}>Email address</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="you@example.com"
-          placeholderTextColor="#9298A7"
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
+          <View style={styles.card}>
+            <View style={styles.cardHeadingRow}>
+              <View style={styles.headingIcon}>
+                <Feather name="user" size={20} color={PURPLE} />
+              </View>
+              <View style={styles.headingCopy}>
+                <Text style={styles.heading}>Welcome back</Text>
+                <Text style={styles.subtitle}>Sign in to your owner account</Text>
+              </View>
+            </View>
 
-        <Text style={styles.label}>Password</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Enter your password"
-          placeholderTextColor="#9298A7"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          autoCapitalize="none"
-        />
+            <Text style={styles.label}>Email address</Text>
+            <View style={styles.inputWrap}>
+              <Feather name="mail" size={18} color="#9A8BB8" />
+              <TextInput
+                style={styles.input}
+                placeholder="you@example.com"
+                placeholderTextColor="#9A9AAF"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="email"
+                textContentType="emailAddress"
+                returnKeyType="next"
+              />
+            </View>
 
-        <TouchableOpacity
-          style={styles.forgot}
-          onPress={handleForgotPassword}
-          disabled={loading}
-        >
-          <Text style={styles.link}>Forgot password?</Text>
-        </TouchableOpacity>
+            <Text style={styles.label}>Password</Text>
+            <View style={styles.inputWrap}>
+              <Feather name="lock" size={18} color="#9A8BB8" />
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your password"
+                placeholderTextColor="#9A9AAF"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoComplete="password"
+                textContentType="password"
+                returnKeyType="done"
+                onSubmitEditing={() => void handleLogin()}
+              />
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                onPress={() => setShowPassword((value) => !value)}
+                hitSlop={10}
+                style={styles.eyeButton}
+              >
+                <Feather
+                  name={showPassword ? "eye-off" : "eye"}
+                  size={18}
+                  color={MUTED}
+                />
+              </TouchableOpacity>
+            </View>
 
-        <TouchableOpacity
-          style={[styles.button, loading && { opacity: 0.65 }]}
-          onPress={handleLogin}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color={NAVY} />
-          ) : (
-            <Text style={styles.buttonText}>SIGN IN</Text>
-          )}
-        </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.forgot}
+              onPress={handleForgotPassword}
+              disabled={loading}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.forgotText}>Forgot password?</Text>
+            </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.signup}
-          onPress={() => router.push("/signup")}
-        >
-          <Text style={styles.footerText}>
-            New owner? <Text style={styles.link}>Create account</Text>
-          </Text>
-        </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => void handleLogin()}
+              disabled={loading}
+              activeOpacity={0.85}
+              style={styles.primaryButtonWrap}
+            >
+              <LinearGradient
+                colors={[PURPLE, PURPLE_BRIGHT]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.primaryButton, loading && styles.buttonDisabled]}
+              >
+                {loading ? (
+                  <ActivityIndicator color={WHITE} />
+                ) : (
+                  <>
+                    <Text style={styles.primaryButtonText}>Sign in</Text>
+                    <Feather name="arrow-right" size={19} color={WHITE} />
+                  </>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.back}
-          onPress={() => router.replace("/")}
-        >
-          <Text style={styles.footerText}>← Back to role selection</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+            <View style={styles.secureNote}>
+              <Feather name="check-circle" size={15} color="#6B52A3" />
+              <Text style={styles.secureNoteText}>Secure sign-in for institute owners</Text>
+            </View>
+
+            <View style={styles.signupDivider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.orText}>NEW TO GYANDEEP?</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <TouchableOpacity
+              style={styles.signupButton}
+              onPress={() => router.push("/signup")}
+              disabled={loading}
+              activeOpacity={0.75}
+            >
+              <Feather name="user-plus" size={17} color={PURPLE} />
+              <Text style={styles.signupButtonText}>Create owner account</Text>
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.replace("/")}
+            activeOpacity={0.75}
+          >
+            <Feather name="arrow-left" size={16} color="#F0E9FF" />
+            <Text style={styles.backText}>Back to role selection</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.footerCaption}>GyanDeep Academy · Learn with purpose</Text>
+        </View>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
+  root: {
+    flex: 1,
+    backgroundColor: PURPLE_DARK,
+  },
+  keyboard: {
+    flex: 1,
+  },
+  fixedContent: {
     flexGrow: 1,
     justifyContent: "center",
-    backgroundColor: NAVY,
-    padding: 22,
+    paddingHorizontal: 22,
+    paddingTop: Platform.OS === "android" ? 28 : 44,
+    paddingBottom: 28,
+  },
+  orbTop: {
+    position: "absolute",
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    top: -100,
+    right: -75,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  orbBottom: {
+    position: "absolute",
+    width: 190,
+    height: 190,
+    borderRadius: 95,
+    bottom: -70,
+    left: -75,
+    backgroundColor: "rgba(255,255,255,0.07)",
+  },
+  brandArea: {
+    alignItems: "center",
+    marginBottom: 15,
+  },
+  logoBadge: {
+    width: 52,
+    height: 52,
+    borderRadius: 17,
+    backgroundColor: WHITE,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.65)",
+  },
+  logoImage: {
+    width: 42,
+    height: 42,
   },
   brand: {
-    color: GOLD,
-    fontSize: 29,
+    color: WHITE,
+    fontSize: 25,
     fontWeight: "800",
+    letterSpacing: -0.5,
     textAlign: "center",
   },
   tagline: {
-    color: "#D6D9E3",
-    fontSize: 10,
-    letterSpacing: 2,
+    color: "#E6DBFF",
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 2.1,
     textAlign: "center",
-    marginTop: 7,
-    marginBottom: 28,
+    marginTop: 8,
+  },
+  brandDivider: {
+    width: 42,
+    height: 3,
+    borderRadius: 3,
+    backgroundColor: "#D9C5FF",
+    marginTop: 12,
+    marginBottom: 10,
+  },
+  welcomeLine: {
+    color: "#F3EDFF",
+    fontSize: 15,
+    textAlign: "center",
+  },
+  welcomeLineStrong: {
+    color: WHITE,
+    fontSize: 18,
+    fontWeight: "800",
+    textAlign: "center",
+    marginTop: 2,
   },
   card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 22,
-    padding: 23,
+    width: "100%",
+    maxWidth: 480,
+    alignSelf: "center",
+    backgroundColor: WHITE,
+    borderRadius: 23,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.8)",
+    shadowColor: "#21075C",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.18,
+    shadowRadius: 22,
+    elevation: 8,
   },
-  heading: { color: NAVY, fontSize: 25, fontWeight: "800" },
-  subtitle: { color: "#687084", fontSize: 13, marginTop: 7, marginBottom: 22 },
+  cardHeadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 15,
+  },
+  headingIcon: {
+    width: 45,
+    height: 45,
+    borderRadius: 15,
+    backgroundColor: "#F0E9FF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  headingCopy: {
+    flex: 1,
+  },
+  heading: {
+    color: TEXT,
+    fontSize: 23,
+    fontWeight: "800",
+    letterSpacing: -0.4,
+  },
+  subtitle: {
+    color: MUTED,
+    fontSize: 12,
+    marginTop: 4,
+  },
   label: {
-    color: NAVY,
-    fontSize: 13,
+    color: "#374151",
+    fontSize: 12,
     fontWeight: "700",
-    marginBottom: 7,
-    marginTop: 14,
+    marginBottom: 8,
+    marginTop: 13,
+  },
+  inputWrap: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 14,
+    backgroundColor: "#FBFAFF",
+    paddingHorizontal: 14,
   },
   input: {
-    borderWidth: 1,
-    borderColor: "#DCE0E8",
-    borderRadius: 11,
-    padding: 14,
-    fontSize: 15,
-    color: NAVY,
-    backgroundColor: "#FAFBFD",
+    flex: 1,
+    minWidth: 0,
+    color: TEXT,
+    fontSize: 14,
+    paddingVertical: 11,
+    paddingHorizontal: 10,
   },
-  forgot: { alignSelf: "flex-end", marginTop: 13 },
-  link: { color: NAVY, fontWeight: "800" },
-  button: {
-    backgroundColor: GOLD,
-    borderRadius: 12,
-    padding: 16,
+  eyeButton: {
+    padding: 4,
+    marginLeft: 3,
+  },
+  forgot: {
+    alignSelf: "flex-end",
+    marginTop: 13,
+    paddingVertical: 3,
+  },
+  forgotText: {
+    color: PURPLE,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  primaryButtonWrap: {
+    marginTop: 17,
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+  primaryButton: {
+    minHeight: 49,
+    borderRadius: 14,
+    flexDirection: "row",
     alignItems: "center",
-    marginTop: 24,
+    justifyContent: "center",
+    gap: 10,
+    paddingHorizontal: 18,
   },
-  buttonText: { color: NAVY, fontWeight: "800", letterSpacing: 0.6 },
-  signup: { alignItems: "center", marginTop: 23 },
-  footerText: { color: "#687084", fontSize: 13 },
-  back: { alignItems: "center", marginTop: 20 },
+  buttonDisabled: {
+    opacity: 0.7,
+  },
+  primaryButtonText: {
+    color: WHITE,
+    fontSize: 15,
+    fontWeight: "800",
+    letterSpacing: 0.4,
+  },
+  secureNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 15,
+    gap: 7,
+  },
+  secureNoteText: {
+    color: MUTED,
+    fontSize: 11,
+  },
+  signupDivider: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 16,
+    marginBottom: 12,
+  },
+  dividerLine: {
+    height: 1,
+    backgroundColor: "#EEEAF6",
+    flex: 1,
+  },
+  orText: {
+    color: "#9690A6",
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+  },
+  signupButton: {
+    minHeight: 49,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 9,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "#D8C9F8",
+    backgroundColor: "#FBF9FF",
+    paddingHorizontal: 14,
+  },
+  signupButtonText: {
+    color: PURPLE,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  backButton: {
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 13,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+  },
+  backText: {
+    color: "#F0E9FF",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  footerCaption: {
+    color: "rgba(255,255,255,0.62)",
+    fontSize: 10,
+    textAlign: "center",
+    marginTop: 8,
+  },
 });

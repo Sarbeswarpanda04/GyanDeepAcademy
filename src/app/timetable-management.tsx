@@ -10,17 +10,21 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
 import AppAlert, { type AppAlertType } from "../components/AppAlert";
 
-const NAVY = "#172B4D";
-const BG = "#F5F7FB";
+const NAVY = "#1F2937";
+const BG = "#F3F3FF";
 const WHITE = "#FFFFFF";
-const MUTED = "#748094";
-const BORDER = "#E2E7EF";
-const GOLD = "#D6A84F";
+const MUTED = "#718096";
+const BORDER = "#E8E3F5";
+const GOLD = "#C4B5FD";
+const PURPLE = "#611CD0";
+const DEEP_PURPLE = "#44109D";
+const VIVID_PURPLE = "#4C02F7";
 const DAYS = [
   "Monday",
   "Tuesday",
@@ -279,8 +283,15 @@ export default function TimetableManagementScreen() {
   };
 
   const saveEntry = async () => {
-    if (!instituteId || !selectedClassId || !selectedSlot) return;
-    if (!selectedSubjectId) {
+    // Snapshot the selected values before awaiting any network request.
+    const iid = instituteId;
+    const classId = selectedClassId;
+    const day = selectedDay;
+    const slot = selectedSlot;
+    const subjectId = selectedSubjectId;
+
+    if (!iid || !classId || !slot) return;
+    if (!subjectId) {
       showAlert(
         "Choose a subject",
         "Select a subject that is assigned to this class and has a teacher assigned.",
@@ -288,9 +299,9 @@ export default function TimetableManagementScreen() {
       );
       return;
     }
+
     const assignment = assignments.find(
-      (a) =>
-        a.class_id === selectedClassId && a.subject_id === selectedSubjectId,
+      (a) => a.class_id === classId && a.subject_id === subjectId,
     );
     if (!assignment) {
       showAlert(
@@ -300,45 +311,52 @@ export default function TimetableManagementScreen() {
       );
       return;
     }
-    const conflict = entries.find(
-      (e) =>
-        e.class_id === selectedClassId &&
-        e.day_of_week === selectedDay &&
-        e.period_id === selectedSlot.period.id &&
-        e.id !== undefined,
-    );
+
     const existing = entries.find(
       (e) =>
-        e.class_id === selectedClassId &&
-        e.day_of_week === selectedDay &&
-        e.batch_id === selectedSlot.batch.id &&
-        e.period_id === selectedSlot.period.id,
+        e.class_id === classId &&
+        e.day_of_week === day &&
+        e.batch_id === slot.batch.id &&
+        e.period_id === slot.period.id,
     );
-    if (conflict && !existing) {
+
+    // Only consider the same class/day/batch/period a duplicate.
+    // The previous check ignored batch_id and could flag unrelated entries.
+    const conflict = entries.find(
+      (e) =>
+        e.class_id === classId &&
+        e.day_of_week === day &&
+        e.batch_id === slot.batch.id &&
+        e.period_id === slot.period.id &&
+        e.id !== existing?.id,
+    );
+    if (conflict) {
       showAlert(
         "Period already occupied",
-        "This class already has a timetable entry in this period. Remove or edit that entry before assigning another.",
+        "This class period already has an entry. Refresh the timetable and try again.",
         "warning",
       );
       return;
     }
+
     setSaving(true);
     try {
       const payload = {
-        institute_id: instituteId,
-        class_id: selectedClassId,
-        day_of_week: selectedDay,
-        batch_id: selectedSlot.batch.id,
-        period_id: selectedSlot.period.id,
-        subject_id: selectedSubjectId,
+        institute_id: iid,
+        class_id: classId,
+        day_of_week: day,
+        batch_id: slot.batch.id,
+        period_id: slot.period.id,
+        subject_id: subjectId,
         teacher_id: assignment.teacher_id,
       };
+
       const result = existing
         ? await supabase
             .from("institute_timetable_entries")
             .update(payload)
             .eq("id", existing.id)
-            .eq("institute_id", instituteId)
+            .eq("institute_id", iid)
             .select(
               "id,institute_id,class_id,day_of_week,batch_id,period_id,subject_id,teacher_id",
             )
@@ -350,19 +368,51 @@ export default function TimetableManagementScreen() {
               "id,institute_id,class_id,day_of_week,batch_id,period_id,subject_id,teacher_id",
             )
             .single();
+
       if (result.error) throw result.error;
-      setEntries((current) =>
-        existing
-          ? current.map((e) =>
-              e.id === existing.id ? (result.data as Entry) : e,
-            )
-          : [...current, result.data as Entry],
-      );
+      if (!result.data) {
+        throw new Error("Supabase did not return the saved timetable entry.");
+      }
+
+      // Verify the row is actually readable from the database before showing success.
+      const verify = await supabase
+        .from("institute_timetable_entries")
+        .select(
+          "id,institute_id,class_id,day_of_week,batch_id,period_id,subject_id,teacher_id",
+        )
+        .eq("institute_id", iid)
+        .eq("class_id", classId)
+        .eq("day_of_week", day)
+        .eq("batch_id", slot.batch.id)
+        .eq("period_id", slot.period.id)
+        .maybeSingle();
+
+      if (verify.error) throw verify.error;
+      if (!verify.data) {
+        throw new Error(
+          "The save request returned successfully, but the entry could not be read back. Check Supabase RLS policies, triggers, and that the app and SQL editor use the same Supabase project.",
+        );
+      }
+
+      // Replace local state with the verified database row.
+      setEntries((current) => {
+        const withoutSlot = current.filter(
+          (e) =>
+            !(
+              e.class_id === classId &&
+              e.day_of_week === day &&
+              e.batch_id === slot.batch.id &&
+              e.period_id === slot.period.id
+            ),
+        );
+        return [...withoutSlot, verify.data as Entry];
+      });
+
       setSelectedSlot(null);
       setSelectedSubjectId(null);
       showAlert(
         "Timetable saved",
-        `${subjects.find((s) => s.id === selectedSubjectId)?.name ?? "Subject"} has been assigned to ${teachers.find((t) => t.id === assignment.teacher_id)?.full_name ?? "the assigned teacher"}.`,
+        `${subjects.find((s) => s.id === subjectId)?.name ?? "Subject"} has been saved for ${day} in ${slot.batch.name}.`,
         "success",
       );
     } catch (e: any) {
@@ -427,8 +477,11 @@ export default function TimetableManagementScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={NAVY} />
-      <View
+      <StatusBar barStyle="light-content" backgroundColor={DEEP_PURPLE} />
+      <LinearGradient
+        colors={[PURPLE, DEEP_PURPLE, VIVID_PURPLE]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={[styles.header, { paddingTop: Math.max(insets.top, 14) + 8 }]}
       >
         <Pressable onPress={() => router.back()} style={styles.back}>
@@ -443,12 +496,28 @@ export default function TimetableManagementScreen() {
         <Pressable onPress={() => void load()} style={styles.refresh}>
           <Feather name="refresh-cw" size={18} color={WHITE} />
         </Pressable>
-      </View>
+      </LinearGradient>
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={NAVY} />
-          <Text style={styles.muted}>Loading classes and schedules…</Text>
+        <View style={styles.loadingContent}>
+          <View style={styles.skeletonHeading} />
+          <View style={styles.skeletonClassRow}>
+            {[0, 1, 2, 3].map((item) => (
+              <View key={item} style={styles.skeletonClass} />
+            ))}
+          </View>
+          <View style={styles.skeletonHeading} />
+          <View style={styles.skeletonDayRow}>
+            {[0, 1, 2, 3, 4, 5, 6].map((item) => (
+              <View key={item} style={styles.skeletonDay} />
+            ))}
+          </View>
+          {[0, 1, 2].map((item) => (
+            <View key={item} style={styles.skeletonPeriod}>
+              <View style={styles.skeletonLineLong} />
+              <View style={styles.skeletonLineShort} />
+            </View>
+          ))}
         </View>
       ) : (
         <ScrollView
@@ -579,7 +648,7 @@ export default function TimetableManagementScreen() {
                   {entry ? (
                     <View style={styles.assignedBox}>
                       <View style={styles.assignedIcon}>
-                        <Feather name="book-open" size={17} color="#16794B" />
+                        <Feather name="book-open" size={17} color="#611CD0" />
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.subjectName}>
@@ -622,7 +691,7 @@ export default function TimetableManagementScreen() {
             })
           )}
           <View style={styles.tip}>
-            <Feather name="info" size={17} color="#9A6A13" />
+            <Feather name="info" size={17} color="#611CD0" />
             <Text style={styles.tipText}>
               Subjects are filtered to the selected class and must have a
               teacher assignment in Teacher Management before they can be added
@@ -769,7 +838,7 @@ export default function TimetableManagementScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: BG },
   header: {
-    backgroundColor: NAVY,
+    backgroundColor: PURPLE,
     paddingHorizontal: 16,
     paddingBottom: 19,
     flexDirection: "row",
@@ -780,7 +849,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 14,
-    backgroundColor: "#2C4160",
+    backgroundColor: "rgba(255,255,255,0.18)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -788,12 +857,27 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 14,
-    backgroundColor: "#2C4160",
+    backgroundColor: "rgba(255,255,255,0.18)",
     alignItems: "center",
     justifyContent: "center",
   },
   title: { fontSize: 20, fontWeight: "800", color: WHITE },
   subtitle: { color: "#C0CCDB", fontSize: 12, marginTop: 4 },
+  loadingContent: { flex: 1, paddingTop: 20, paddingBottom: 30 },
+  skeletonHeading: {
+    height: 18, width: 140, marginHorizontal: 16, marginTop: 8, marginBottom: 14,
+    borderRadius: 8, backgroundColor: "#E7E0F8",
+  },
+  skeletonClassRow: { flexDirection: "row", gap: 8, paddingHorizontal: 16, marginBottom: 18 },
+  skeletonClass: { width: 66, height: 72, borderRadius: 15, backgroundColor: "#EAE4F8" },
+  skeletonDayRow: { flexDirection: "row", gap: 5, paddingHorizontal: 16, marginBottom: 20 },
+  skeletonDay: { flex: 1, height: 39, borderRadius: 12, backgroundColor: "#EAE4F8" },
+  skeletonPeriod: {
+    marginHorizontal: 16, marginBottom: 10, height: 108, borderRadius: 18,
+    borderWidth: 1, borderColor: BORDER, backgroundColor: WHITE, padding: 14, gap: 12,
+  },
+  skeletonLineLong: { height: 14, width: "62%", borderRadius: 7, backgroundColor: "#EAE4F8" },
+  skeletonLineShort: { height: 12, width: "38%", borderRadius: 7, backgroundColor: "#F0EAFE" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   muted: { color: MUTED, fontSize: 13, lineHeight: 19, textAlign: "center" },
   sectionHead: {
@@ -804,7 +888,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  sectionTitle: { color: NAVY, fontSize: 17, fontWeight: "800" },
+  sectionTitle: { color: PURPLE, fontSize: 17, fontWeight: "800" },
   sectionHint: { color: MUTED, fontSize: 12, marginTop: 3 },
   classRow: { paddingHorizontal: 16, gap: 8 },
   classCard: {
@@ -818,9 +902,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  classCardSelected: { backgroundColor: NAVY, borderColor: NAVY },
-  classIndex: { fontSize: 10, fontWeight: "800", color: GOLD, marginBottom: 7 },
-  className: { fontSize: 12, fontWeight: "800", color: NAVY, maxWidth: 60 },
+  classCardSelected: { backgroundColor: PURPLE, borderColor: PURPLE },
+  classIndex: { fontSize: 10, fontWeight: "800", color: "#DDD6FE", marginBottom: 7 },
+  className: { fontSize: 12, fontWeight: "800", color: PURPLE, maxWidth: 60 },
   selectedText: { color: WHITE },
   daysGrid: {
     flexDirection: "row",
@@ -839,15 +923,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  daySelected: { backgroundColor: NAVY, borderColor: NAVY },
-  dayText: { color: NAVY, fontSize: 12, fontWeight: "800" },
+  daySelected: { backgroundColor: PURPLE, borderColor: PURPLE },
+  dayText: { color: PURPLE, fontSize: 12, fontWeight: "800" },
   countPill: {
-    backgroundColor: "#E8EEF7",
+    backgroundColor: "#F0EAFE",
     borderRadius: 18,
     paddingHorizontal: 11,
     paddingVertical: 6,
   },
-  countText: { color: NAVY, fontSize: 11, fontWeight: "800" },
+  countText: { color: PURPLE, fontSize: 11, fontWeight: "800" },
   periodCard: {
     marginHorizontal: 16,
     marginBottom: 10,
@@ -860,7 +944,7 @@ const styles = StyleSheet.create({
   periodTime: {
     paddingHorizontal: 14,
     paddingVertical: 12,
-    backgroundColor: "#F9FAFD",
+    backgroundColor: "#FAF9FF",
   },
   periodNo: {
     color: MUTED,
@@ -868,7 +952,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: 0.8,
   },
-  timeText: { color: NAVY, fontSize: 15, fontWeight: "800", marginTop: 4 },
+  timeText: { color: PURPLE, fontSize: 15, fontWeight: "800", marginTop: 4 },
   batchName: { color: MUTED, fontSize: 12, marginTop: 3 },
   assignButton: {
     minHeight: 48,
@@ -877,7 +961,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 9,
   },
-  assignText: { flex: 1, color: NAVY, fontSize: 13, fontWeight: "700" },
+  assignText: { flex: 1, color: PURPLE, fontSize: 13, fontWeight: "700" },
   assignedBox: {
     flexDirection: "row",
     alignItems: "center",
@@ -888,17 +972,17 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 11,
-    backgroundColor: "#E4F6EB",
+    backgroundColor: "#F0EAFE",
     alignItems: "center",
     justifyContent: "center",
   },
-  subjectName: { color: NAVY, fontSize: 14, fontWeight: "800" },
+  subjectName: { color: PURPLE, fontSize: 14, fontWeight: "800" },
   teacherName: { color: MUTED, fontSize: 12, marginTop: 4 },
   smallAction: {
     width: 31,
     height: 31,
     borderRadius: 10,
-    backgroundColor: "#F0F3F8",
+    backgroundColor: "#F5F1FF",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -916,12 +1000,12 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 16,
-    backgroundColor: "#EDF1F7",
+    backgroundColor: "#F0EAFE",
     alignItems: "center",
     justifyContent: "center",
   },
   emptyTitle: {
-    color: NAVY,
+    color: PURPLE,
     fontWeight: "800",
     fontSize: 15,
     textAlign: "center",
@@ -933,9 +1017,9 @@ const styles = StyleSheet.create({
     marginTop: 8,
     padding: 13,
     borderRadius: 14,
-    backgroundColor: "#FFF6E5",
+    backgroundColor: "#F5F0FF",
   },
-  tipText: { flex: 1, color: "#79551C", fontSize: 12, lineHeight: 18 },
+  tipText: { flex: 1, color: "#5B21B6", fontSize: 12, lineHeight: 18 },
   modalRoot: { flex: 1, justifyContent: "flex-end" },
   scrim: {
     ...StyleSheet.absoluteFill,
@@ -954,7 +1038,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 4,
     borderRadius: 3,
-    backgroundColor: "#D8DEE8",
+    backgroundColor: "#DDD6FE",
     marginBottom: 16,
   },
   sheetHeader: {
@@ -962,11 +1046,11 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     marginBottom: 20,
   },
-  sheetTitle: { fontSize: 21, color: NAVY, fontWeight: "900" },
+  sheetTitle: { fontSize: 21, color: PURPLE, fontWeight: "900" },
   sheetSub: { fontSize: 12, color: MUTED, marginTop: 5 },
   sheetBatch: {
     fontSize: 13,
-    color: "#A5792A",
+    color: "#6D28D9",
     fontWeight: "800",
     marginTop: 5,
   },
@@ -974,11 +1058,11 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 12,
-    backgroundColor: "#F0F3F8",
+    backgroundColor: "#F5F1FF",
     alignItems: "center",
     justifyContent: "center",
   },
-  fieldLabel: { color: NAVY, fontSize: 13, fontWeight: "800", marginBottom: 9 },
+  fieldLabel: { color: PURPLE, fontSize: 13, fontWeight: "800", marginBottom: 9 },
   subjectOption: {
     borderWidth: 1,
     borderColor: BORDER,
@@ -989,26 +1073,26 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 11,
   },
-  subjectOptionSelected: { borderColor: NAVY, backgroundColor: "#F1F5FB" },
+  subjectOptionSelected: { borderColor: PURPLE, backgroundColor: "#F3EEFF" },
   radioOuter: {
     width: 20,
     height: 20,
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: "#AAB5C5",
+    borderColor: "#C4B5FD",
     alignItems: "center",
     justifyContent: "center",
   },
-  radioOuterSelected: { borderColor: NAVY },
-  radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: NAVY },
-  optionTitle: { color: NAVY, fontWeight: "800", fontSize: 14 },
+  radioOuterSelected: { borderColor: PURPLE },
+  radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: PURPLE },
+  optionTitle: { color: PURPLE, fontWeight: "800", fontSize: 14 },
   optionTeacher: { color: MUTED, fontSize: 12, marginTop: 4 },
   emptyInline: { padding: 20, alignItems: "center", gap: 8 },
   saveButton: {
     marginTop: 14,
     height: 50,
     borderRadius: 15,
-    backgroundColor: NAVY,
+    backgroundColor: PURPLE,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",

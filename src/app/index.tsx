@@ -13,13 +13,18 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { supabase } from "../lib/supabase";
 
-const NAVY = "#123263";
-const BLUE = "#2878E5";
-const BACKGROUND = "#EDF5FF";
-const CARD = "#FFFFFF";
+const PURPLE = "#611CD0";
+const PURPLE_DARK = "#44109D";
+const PURPLE_BRIGHT = "#4C02F7";
+const BACKGROUND = "#F3F3FF";
+const TEXT = "#1F2937";
+const MUTED = "#718096";
+const BORDER = "#E8E3F5";
+const WHITE = "#FFFFFF";
 
 const APP_LOGO: ImageSourcePropType = require("../../assets/images/icon.png");
 
@@ -27,34 +32,20 @@ const roles = [
   {
     id: "owner",
     title: "Coaching Owner",
-    subtitle: "Manage your entire institute",
+    subtitle: "Manage your institute",
     icon: "business-outline" as const,
-    color: "#2878E5",
-    iconBackground: "#E7F0FF",
-  },
-  {
-    id: "manager",
-    title: "Manager",
-    subtitle: "Manage daily operations",
-    icon: "clipboard-outline" as const,
-    color: "#8B5CF6",
-    iconBackground: "#F0EAFE",
   },
   {
     id: "teacher",
     title: "Teacher",
     subtitle: "Classes, attendance and exams",
     icon: "school-outline" as const,
-    color: "#0F9D8A",
-    iconBackground: "#E1F7F2",
   },
   {
     id: "student",
     title: "Student",
     subtitle: "Timetable, fees and results",
     icon: "book-outline" as const,
-    color: "#D18A22",
-    iconBackground: "#FFF3DF",
   },
 ];
 
@@ -65,7 +56,6 @@ type InstituteBranding = {
 
 export default function Index() {
   const router = useRouter();
-
   const [selectedRole, setSelectedRole] = useState("");
   const [checkingSession, setCheckingSession] = useState(true);
   const [institute, setInstitute] = useState<InstituteBranding | null>(null);
@@ -77,27 +67,23 @@ export default function Index() {
     async function restoreSession() {
       try {
         const { data, error } = await supabase.auth.getSession();
-
         if (error) throw error;
 
         const session = data.session;
 
-        // No authenticated session: display the role-selection screen.
         if (!session?.user) {
           if (!cancelled) setCheckingSession(false);
           return;
         }
 
-        // 1. Check active teacher membership first.
-        const { data: teacherMembership, error: teacherError } =
-          await supabase
-            .from("institute_team_members")
-            .select("id")
-            .eq("user_id", session.user.id)
-            .eq("role", "teacher")
-            .eq("is_active", true)
-            .limit(1)
-            .maybeSingle();
+        const { data: teacherMembership, error: teacherError } = await supabase
+          .from("institute_team_members")
+          .select("id")
+          .eq("user_id", session.user.id)
+          .eq("role", "teacher")
+          .eq("is_active", true)
+          .limit(1)
+          .maybeSingle();
 
         if (teacherError) throw teacherError;
         if (cancelled) return;
@@ -107,27 +93,23 @@ export default function Index() {
           return;
         }
 
-        // 2. Check coaching-owner membership.
-        const { data: ownerMembership, error: ownerError } =
-          await supabase
-            .from("institute_members")
-            .select("institute_id")
-            .eq("user_id", session.user.id)
-            .eq("role", "owner")
-            .limit(1)
-            .maybeSingle();
+        const { data: ownerMembership, error: ownerError } = await supabase
+          .from("institute_members")
+          .select("institute_id")
+          .eq("user_id", session.user.id)
+          .eq("role", "owner")
+          .limit(1)
+          .maybeSingle();
 
         if (ownerError) throw ownerError;
         if (cancelled) return;
 
-        // 3. Restore institute branding for an owner who has an institute.
         if (ownerMembership?.institute_id) {
-          const { data: instituteData, error: instituteError } =
-            await supabase
-              .from("institutes")
-              .select("name, logo_url")
-              .eq("id", ownerMembership.institute_id)
-              .maybeSingle();
+          const { data: instituteData, error: instituteError } = await supabase
+            .from("institutes")
+            .select("name, logo_url")
+            .eq("id", ownerMembership.institute_id)
+            .maybeSingle();
 
           if (instituteError) throw instituteError;
           if (cancelled) return;
@@ -135,8 +117,6 @@ export default function Index() {
           if (instituteData) {
             let logoUrl: string | null = instituteData.logo_url || null;
 
-            // If logo_url is a storage path rather than a URL,
-            // create a signed URL for the institute-assets bucket.
             if (logoUrl && !/^https?:\/\//i.test(logoUrl)) {
               const { data: signedData, error: storageError } =
                 await supabase.storage
@@ -163,40 +143,25 @@ export default function Index() {
           }
 
           if (cancelled) return;
-
           router.replace("/dashboard" as never);
           return;
         }
 
-        /*
-         * Do not assume every authenticated user is an owner.
-         * Manager/student dashboard routes are intentionally not guessed
-         * here because their exact route paths have not been established.
-         *
-         * Leave those sessions on the role-selection screen rather than
-         * incorrectly redirecting them to institute setup.
-         */
-        if (!cancelled) {
-          setCheckingSession(false);
-        }
+        // Other authenticated roles remain on the role-selection screen.
+        if (!cancelled) setCheckingSession(false);
       } catch (error: unknown) {
         if (cancelled) return;
 
         console.error("[role-selection] Session restore failed:", error);
-
         Alert.alert(
           "Unable to restore your session",
-          error instanceof Error
-            ? error.message
-            : "Please try again.",
+          error instanceof Error ? error.message : "Please try again.",
         );
-
         setCheckingSession(false);
       }
     }
 
     void restoreSession();
-
     return () => {
       cancelled = true;
     };
@@ -219,25 +184,19 @@ export default function Index() {
   if (checkingSession) {
     return (
       <SafeAreaView style={styles.loadingScreen}>
-        <StatusBar
-          barStyle="dark-content"
-          backgroundColor={BACKGROUND}
+        <StatusBar barStyle="light-content" backgroundColor={PURPLE_DARK} />
+        <LinearGradient
+          colors={[PURPLE, PURPLE_DARK, PURPLE_BRIGHT]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
         />
-
         <View style={styles.loadingContent}>
-          <View style={styles.loadingLogo}>
-            <Image
-              source={APP_LOGO}
-              style={styles.loadingLogoImage}
-              resizeMode="contain"
-            />
+          <View style={styles.loadingLogoShadow}>
+            <Image source={APP_LOGO} style={styles.loadingLogoImage} resizeMode="contain" />
           </View>
-
-          <ActivityIndicator size="large" color={BLUE} />
-
-          <Text style={styles.loadingText}>
-            Preparing your experience...
-          </Text>
+          <ActivityIndicator size="large" color={WHITE} />
+          <Text style={styles.loadingText}>Preparing your experience...</Text>
         </View>
       </SafeAreaView>
     );
@@ -248,73 +207,54 @@ export default function Index() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar
-        barStyle="dark-content"
-        backgroundColor={BACKGROUND}
+      <StatusBar barStyle="light-content" backgroundColor={PURPLE_DARK} />
+      <LinearGradient
+        colors={[PURPLE, PURPLE_DARK, PURPLE_BRIGHT]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
       />
+      <View pointerEvents="none" style={styles.orbTop} />
+      <View pointerEvents="none" style={styles.orbBottom} />
 
       <ScrollView
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
+        bounces={false}
       >
-        {/* Brand header */}
-        <View style={styles.brand}>
-          <View style={styles.logoOuter}>
-            {logoUri ? (
-              <Image
-                source={{ uri: logoUri }}
-                style={styles.logoImage}
-                resizeMode="contain"
-                onError={() => setLogoFailed(true)}
-              />
-            ) : (
-              <Image
-                source={APP_LOGO}
-                style={styles.logoImage}
-                resizeMode="contain"
-              />
-            )}
+        <View style={styles.brandBlock}>
+          <View style={styles.logoGlow}>
+            <LinearGradient
+              colors={["#FFFFFF", "#F0E7FF"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.logoSurface}
+            >
+              {logoUri ? (
+                <Image
+                  source={{ uri: logoUri }}
+                  style={styles.logoImage}
+                  resizeMode="contain"
+                  onError={() => setLogoFailed(true)}
+                />
+              ) : (
+                <Image source={APP_LOGO} style={styles.logoImage} resizeMode="contain" />
+              )}
+            </LinearGradient>
           </View>
 
           <Text style={styles.brandName}>{displayName}</Text>
-
-          <View style={styles.locationRow}>
-            <Ionicons
-              name="location-outline"
-              size={12}
-              color="#7285A3"
-            />
-            <Text style={styles.location}>KHORDHA, ODISHA</Text>
-          </View>
+          <Text style={styles.brandTagline}>LEARN TODAY. LEAD TOMORROW.</Text>
+          <View style={styles.brandAccent} />
+          <Text style={styles.heroLine}>A brighter future</Text>
+          <Text style={styles.heroAccent}>starts with learning.</Text>
         </View>
 
-        {/* Heading */}
-        <View style={styles.heading}>
-          <View style={styles.eyebrowPill}>
-            <Ionicons
-              name="sparkles-outline"
-              size={13}
-              color={BLUE}
-            />
-            <Text style={styles.eyebrow}>
-              YOUR LEARNING COMMUNITY
-            </Text>
-          </View>
-
-          <Text style={styles.title}>
-            How will you use{"\n"}
-            <Text style={styles.titleAccent}>
-              GyanDeep Academy?
-            </Text>
-          </Text>
-
-          <Text style={styles.description}>
-            Select your role to access the tools and features designed
-            for you.
-          </Text>
+        <View style={styles.selectionHeader}>
+          <Text style={styles.sectionTitle}>Who's learning today?</Text>
+          <Text style={styles.sectionSubtitle}>Choose your space to continue.</Text>
         </View>
 
-        {/* Role selection */}
         <View style={styles.roleList}>
           {roles.map((role) => {
             const active = selectedRole === role.id;
@@ -331,33 +271,24 @@ export default function Index() {
                   pressed && styles.roleCardPressed,
                 ]}
               >
-                <View
-                  style={[
-                    styles.roleIcon,
-                    { backgroundColor: role.iconBackground },
-                    active && styles.roleIconActive,
-                  ]}
-                >
+                <View style={[styles.roleIcon, active && styles.roleIconActive]}>
                   <Ionicons
                     name={role.icon}
-                    size={26}
-                    color={role.color}
+                    size={23}
+                    color={active ? WHITE : PURPLE}
                   />
                 </View>
 
                 <View style={styles.roleText}>
-                  <Text style={styles.roleTitle}>{role.title}</Text>
-                  <Text style={styles.roleSubtitle}>
+                  <Text style={[styles.roleTitle, active && styles.roleTitleActive]}>
+                    {role.title}
+                  </Text>
+                  <Text style={[styles.roleSubtitle, active && styles.roleSubtitleActive]}>
                     {role.subtitle}
                   </Text>
                 </View>
 
-                <View
-                  style={[
-                    styles.radio,
-                    active && styles.radioActive,
-                  ]}
-                >
+                <View style={[styles.radio, active && styles.radioActive]}>
                   {active && <View style={styles.radioDot} />}
                 </View>
               </Pressable>
@@ -365,31 +296,31 @@ export default function Index() {
           })}
         </View>
 
-        {/* Continue */}
         <Pressable
           accessibilityRole="button"
           onPress={continueSetup}
           disabled={!selectedRole}
           style={({ pressed }) => [
-            styles.button,
+            styles.buttonOuter,
             !selectedRole && styles.buttonDisabled,
-            pressed && selectedRole && styles.buttonPressed,
+            pressed && !!selectedRole && styles.buttonPressed,
           ]}
         >
-          <Text style={styles.buttonText}>Continue</Text>
-          <Ionicons
-            name="arrow-forward"
-            size={20}
-            color="#FFFFFF"
-          />
+          <LinearGradient
+            colors={selectedRole ? [PURPLE, PURPLE_BRIGHT] : ["#9A85C8", "#8E7AB8"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.button}
+          >
+            <Text style={styles.buttonText}>Continue</Text>
+            <Ionicons name="arrow-forward" size={19} color={WHITE} />
+          </LinearGradient>
         </Pressable>
 
         <View style={styles.footer}>
-          <View style={styles.footerLine} />
-          <Text style={styles.footerText}>
-            LEARN TODAY, LEAD TOMORROW
-          </Text>
-          <View style={styles.footerLine} />
+          <Ionicons name="sparkles-outline" size={13} color="#E8DFFF" />
+          <Text style={styles.footerText}>YOUR JOURNEY. YOUR POTENTIAL.</Text>
+          <Ionicons name="sparkles-outline" size={13} color="#E8DFFF" />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -399,11 +330,11 @@ export default function Index() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: BACKGROUND,
+    backgroundColor: PURPLE_DARK,
   },
   loadingScreen: {
     flex: 1,
-    backgroundColor: BACKGROUND,
+    backgroundColor: PURPLE_DARK,
   },
   loadingContent: {
     flex: 1,
@@ -411,229 +342,260 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 18,
   },
-  loadingLogo: {
-    width: 82,
-    height: 82,
-    borderRadius: 25,
-    backgroundColor: "#FFFFFF",
-    padding: 8,
-    borderWidth: 1,
-    borderColor: "#D7E6FC",
+  loadingLogoShadow: {
+    width: 108,
+    height: 108,
+    borderRadius: 32,
+    padding: 10,
+    backgroundColor: WHITE,
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#180044",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    elevation: 12,
   },
   loadingLogoImage: {
     width: "100%",
     height: "100%",
   },
   loadingText: {
-    color: NAVY,
-    fontSize: 14,
+    color: "#F0E9FF",
+    fontSize: 13,
     fontWeight: "600",
+  },
+  orbTop: {
+    position: "absolute",
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    top: -135,
+    right: -90,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  orbBottom: {
+    position: "absolute",
+    width: 210,
+    height: 210,
+    borderRadius: 105,
+    bottom: -100,
+    left: -100,
+    backgroundColor: "rgba(255,255,255,0.07)",
   },
   container: {
     flexGrow: 1,
-    paddingHorizontal: 22,
+    justifyContent: "center",
+    paddingHorizontal: 23,
     paddingTop: 18,
-    paddingBottom: 24,
+    paddingBottom: 22,
   },
-  brand: {
+  brandBlock: {
     alignItems: "center",
-    marginBottom: 28,
+    marginBottom: 27,
   },
-  logoOuter: {
-    width: 76,
-    height: 76,
-    borderRadius: 24,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1.5,
-    borderColor: "#D6E5FB",
-    padding: 7,
+  logoGlow: {
+    width: 132,
+    height: 132,
+    borderRadius: 40,
+    padding: 4,
+    marginBottom: 18,
+    backgroundColor: "rgba(255,255,255,0.24)",
+    shadowColor: "#160039",
+    shadowOffset: { width: 0, height: 13 },
+    shadowOpacity: 0.35,
+    shadowRadius: 22,
+    elevation: 14,
+  },
+  logoSurface: {
+    flex: 1,
+    borderRadius: 36,
+    padding: 12,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 12,
-    shadowColor: "#285B9C",
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.09,
-    shadowRadius: 12,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.8)",
   },
   logoImage: {
     width: "100%",
     height: "100%",
   },
   brandName: {
-    color: NAVY,
-    fontSize: 22,
-    fontWeight: "800",
-    letterSpacing: -0.4,
+    color: WHITE,
+    fontSize: 30,
+    fontWeight: "900",
+    letterSpacing: -1.2,
     textAlign: "center",
+    textShadowColor: "rgba(20,0,60,0.35)",
+    textShadowOffset: { width: 0, height: 3 },
+    textShadowRadius: 7,
   },
-  locationRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginTop: 6,
-  },
-  location: {
-    fontSize: 10,
-    letterSpacing: 1.8,
-    color: "#7285A3",
-    fontWeight: "700",
-  },
-  heading: {
-    marginBottom: 22,
-  },
-  eyebrowPill: {
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "#DDEBFF",
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 20,
-    marginBottom: 13,
-  },
-  eyebrow: {
-    color: BLUE,
+  brandTagline: {
+    color: "#E7DAFF",
     fontSize: 9,
     fontWeight: "800",
-    letterSpacing: 1.1,
+    letterSpacing: 2.4,
+    textAlign: "center",
+    marginTop: 8,
   },
-  title: {
-    color: NAVY,
-    fontSize: 28,
-    lineHeight: 36,
+  brandAccent: {
+    width: 42,
+    height: 4,
+    borderRadius: 4,
+    backgroundColor: "#D9C4FF",
+    marginTop: 17,
+    marginBottom: 15,
+  },
+  heroLine: {
+    color: WHITE,
+    fontSize: 22,
+    fontWeight: "700",
+    textAlign: "center",
+    letterSpacing: -0.3,
+  },
+  heroAccent: {
+    color: "#E4D2FF",
+    fontSize: 22,
+    fontWeight: "900",
+    textAlign: "center",
+    letterSpacing: -0.4,
+    marginTop: 2,
+  },
+  selectionHeader: {
+    marginBottom: 14,
+  },
+  sectionTitle: {
+    color: WHITE,
+    fontSize: 19,
     fontWeight: "800",
-    letterSpacing: -0.7,
+    letterSpacing: -0.3,
   },
-  titleAccent: {
-    color: BLUE,
-  },
-  description: {
-    color: "#647793",
-    fontSize: 13,
-    lineHeight: 20,
-    marginTop: 10,
-    maxWidth: 320,
+  sectionSubtitle: {
+    color: "#E0D4F7",
+    fontSize: 12,
+    marginTop: 5,
   },
   roleList: {
-    gap: 12,
+    gap: 10,
   },
   roleCard: {
-    minHeight: 82,
-    backgroundColor: CARD,
-    borderRadius: 19,
+    minHeight: 73,
+    backgroundColor: "rgba(255,255,255,0.97)",
+    borderRadius: 18,
     borderWidth: 1.5,
-    borderColor: "#DFEAF8",
+    borderColor: "rgba(255,255,255,0.55)",
     flexDirection: "row",
     alignItems: "center",
-    padding: 13,
-    gap: 13,
-    shadowColor: "#214D83",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.035,
-    shadowRadius: 8,
-    elevation: 1,
+    paddingVertical: 11,
+    paddingHorizontal: 13,
+    gap: 12,
+    shadowColor: "#180044",
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.1,
+    shadowRadius: 9,
+    elevation: 3,
   },
   roleCardActive: {
-    borderColor: BLUE,
-    backgroundColor: "#F7FAFF",
-    shadowOpacity: 0.08,
-    elevation: 3,
+    backgroundColor: "#F3ECFF",
+    borderColor: "#D5BFFF",
+    shadowOpacity: 0.22,
+    elevation: 6,
   },
   roleCardPressed: {
     transform: [{ scale: 0.99 }],
   },
   roleIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 16,
+    width: 45,
+    height: 45,
+    borderRadius: 14,
+    backgroundColor: "#F0E8FF",
     alignItems: "center",
     justifyContent: "center",
   },
   roleIconActive: {
-    borderWidth: 1,
-    borderColor: "#C7DBFC",
+    backgroundColor: PURPLE,
   },
   roleText: {
     flex: 1,
-    gap: 5,
+    gap: 4,
   },
   roleTitle: {
-    color: NAVY,
+    color: TEXT,
     fontSize: 14,
     fontWeight: "800",
   },
+  roleTitleActive: {
+    color: PURPLE_DARK,
+  },
   roleSubtitle: {
-    color: "#7889A2",
+    color: MUTED,
     fontSize: 11,
-    lineHeight: 16,
+    lineHeight: 15,
+  },
+  roleSubtitleActive: {
+    color: "#6B4B9D",
   },
   radio: {
-    width: 22,
-    height: 22,
+    width: 21,
+    height: 21,
     borderRadius: 11,
     borderWidth: 1.5,
-    borderColor: "#C7D5E8",
+    borderColor: "#C9B9E6",
     alignItems: "center",
     justifyContent: "center",
   },
   radioActive: {
-    borderColor: BLUE,
+    borderColor: PURPLE,
   },
   radioDot: {
-    width: 11,
-    height: 11,
-    borderRadius: 6,
-    backgroundColor: BLUE,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: PURPLE,
+  },
+  buttonOuter: {
+    marginTop: 17,
+    borderRadius: 16,
+    shadowColor: "#1B004A",
+    shadowOffset: { width: 0, height: 7 },
+    shadowOpacity: 0.28,
+    shadowRadius: 12,
+    elevation: 7,
   },
   button: {
-    minHeight: 56,
-    backgroundColor: BLUE,
-    borderRadius: 17,
-    marginTop: 24,
+    minHeight: 53,
+    borderRadius: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    shadowColor: BLUE,
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 4,
   },
   buttonDisabled: {
-    backgroundColor: "#A8C5ED",
-    shadowOpacity: 0,
-    elevation: 0,
+    opacity: 0.78,
+    shadowOpacity: 0.08,
+    elevation: 2,
   },
   buttonPressed: {
-    opacity: 0.88,
+    opacity: 0.9,
     transform: [{ scale: 0.99 }],
   },
   buttonText: {
-    color: "#FFFFFF",
+    color: WHITE,
     fontSize: 15,
     fontWeight: "800",
+    letterSpacing: 0.3,
   },
   footer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
-    marginTop: 28,
-  },
-  footerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "#D5E2F3",
+    gap: 8,
+    marginTop: 22,
   },
   footerText: {
-    color: "#8091AA",
+    color: "#E8DFFF",
     fontSize: 9,
     fontWeight: "800",
-    letterSpacing: 1.1,
+    letterSpacing: 1.5,
   },
 });

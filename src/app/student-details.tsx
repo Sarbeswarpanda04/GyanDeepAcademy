@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Feather, FontAwesome } from "@expo/vector-icons";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
@@ -7,6 +7,9 @@ import {
   Linking,
   Modal,
   Pressable,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -16,10 +19,10 @@ import {
 import { supabase } from "../lib/supabase";
 import AppAlert, { type AppAlertType } from "../components/AppAlert";
 
-const navy = "#202F41";
-const bg = "#F1F6FA";
+const navy = "#44109D";
+const bg = "#F3F3FF";
 const muted = "#9BAFBD";
-const blue = "#3566AD";
+const blue = "#611CD0";
 
 type StudentDetails = {
   id: string;
@@ -30,15 +33,37 @@ type StudentDetails = {
   photo_path: string | null;
   status: string;
   class_id: string;
+  school_name?: string | null;
+  father_name?: string | null;
+  gender?: string | null;
+  date_of_birth?: string | null;
+  admission_date?: string | null;
+  blood_group?: string | null;
+  address?: string | null;
   seat_number?: string | number | null;
 };
 
 type FeeDetails = {
+  id?: string;
   fee_amount: number;
   fee_frequency: string;
+  billing_day?: number | null;
 };
+type PaymentRow = Record<string, any>;
 
 type StudentConfirmationAction = "activate" | "inactive" | "delete" | null;
+
+function localDateString(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseLocalDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
 
 function ActionRow({
   icon,
@@ -80,9 +105,21 @@ export default function StudentDetailsScreen() {
   const [student, setStudent] = useState<StudentDetails | null>(null);
   const [className, setClassName] = useState("Class");
   const [batchNames, setBatchNames] = useState<string[]>([]);
+  const [subjectNames, setSubjectNames] = useState<string[]>([]);
+  const [payments, setPayments] = useState<PaymentRow[]>([]);
+  const [feePending, setFeePending] = useState(0);
+  const [feeCollected, setFeeCollected] = useState(0);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [fee, setFee] = useState<FeeDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showPayment, setShowPayment] = useState(false);
+  const [paymentSaving, setPaymentSaving] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentDate, setPaymentDate] = useState(localDateString(new Date()));
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [paymentNotes, setPaymentNotes] = useState("");
 
   const showAppAlert = useCallback(
     (
@@ -100,7 +137,11 @@ export default function StudentDetailsScreen() {
   const loadStudent = useCallback(async () => {
     if (!studentId) {
       setLoading(false);
-      showAppAlert("Student unavailable", "No student ID was provided.", "error");
+      showAppAlert(
+        "Student unavailable",
+        "No student ID was provided.",
+        "error",
+      );
       return;
     }
 
@@ -110,7 +151,7 @@ export default function StudentDetailsScreen() {
       const { data: s, error: studentError } = await supabase
         .from("institute_students")
         .select(
-          "id,institute_id,full_name,roll_number,phone,photo_path,status,class_id",
+          "id,institute_id,full_name,roll_number,phone,photo_path,status,class_id,school_name,father_name,gender,date_of_birth,admission_date,blood_group,address",
         )
         .eq("id", studentId)
         .single();
@@ -119,32 +160,77 @@ export default function StudentDetailsScreen() {
 
       setStudent(s);
 
-      const [classResult, feeResult, batchResult] = await Promise.all([
-        supabase
-          .from("institute_classes")
-          .select("name")
-          .eq("id", s.class_id)
-          .maybeSingle(),
+      const [classResult, feeResult, batchResult, studentSubjectResult] =
+        await Promise.all([
+          supabase
+            .from("institute_classes")
+            .select("name")
+            .eq("id", s.class_id)
+            .maybeSingle(),
 
-        supabase
-          .from("institute_student_fees")
-          .select("fee_amount,fee_frequency")
-          .eq("institute_id", s.institute_id)
-          .eq("student_id", s.id)
-          .maybeSingle(),
+          supabase
+            .from("institute_student_fees")
+            .select("id,fee_amount,fee_frequency,billing_day")
+            .eq("institute_id", s.institute_id)
+            .eq("student_id", s.id)
+            .maybeSingle(),
 
-        supabase
-          .from("institute_student_batches")
-          .select("batch_id")
-          .eq("student_id", s.id),
-      ]);
+          supabase
+            .from("institute_student_batches")
+            .select("batch_id")
+            .eq("student_id", s.id),
+          supabase
+            .from("institute_student_subjects")
+            .select("subject_id")
+            .eq("student_id", s.id),
+        ]);
 
       if (classResult.error) throw classResult.error;
       if (feeResult.error) throw feeResult.error;
       if (batchResult.error) throw batchResult.error;
+      if (studentSubjectResult.error) throw studentSubjectResult.error;
+      const subjectIds = (studentSubjectResult.data ?? []).map(
+        (row) => row.subject_id,
+      );
+      if (subjectIds.length) {
+        const { data: subjects, error: subjectsError } = await supabase
+          .from("institute_subjects")
+          .select("id,name")
+          .eq("institute_id", s.institute_id)
+          .in("id", subjectIds);
+        if (subjectsError) throw subjectsError;
+        setSubjectNames((subjects ?? []).map((row) => row.name));
+      } else setSubjectNames([]);
 
       setClassName(classResult.data?.name ?? "Class");
       setFee(feeResult.data ?? null);
+      if (feeResult.data?.id) {
+        const { data: rows, error: paymentError } = await supabase
+          .from("institute_fee_payments")
+          .select("*")
+          .eq("student_fee_id", feeResult.data.id);
+        if (paymentError) throw paymentError;
+        const list: PaymentRow[] = rows ?? [];
+        setPayments(list);
+        // `institute_fee_payments` records completed collections in `amount_paid`;
+        // the Fees screen schema does not require a separate status column.
+        const valueOf = (r: PaymentRow) =>
+          Number(
+            r.amount_paid ?? r.paid_amount ?? r.amount ?? r.payment_amount ?? 0,
+          );
+        const collected = list.reduce((sum, r) => {
+          const value = valueOf(r);
+          return sum + (Number.isFinite(value) ? value : 0);
+        }, 0);
+        setFeeCollected(collected);
+        setFeePending(
+          Math.max(0, Number(feeResult.data.fee_amount ?? 0) - collected),
+        );
+      } else {
+        setPayments([]);
+        setFeeCollected(0);
+        setFeePending(0);
+      }
 
       const batchIds = (batchResult.data ?? []).map((item) => item.batch_id);
 
@@ -195,8 +281,18 @@ export default function StudentDetailsScreen() {
     }
 
     const number = student.phone.replace(/\D/g, "");
+    const internationalNumber =
+      number.length === 10
+        ? `91${number}`
+        : number.length === 12 && number.startsWith("91")
+          ? number
+          : number.startsWith("0") && number.length === 11
+            ? `91${number.slice(1)}`
+            : number;
     const url =
-      kind === "tel" ? `tel:${student.phone}` : `https://wa.me/${number}`;
+      kind === "tel"
+        ? `tel:${student.phone}`
+        : `https://wa.me/${internationalNumber}`;
 
     try {
       await Linking.openURL(url);
@@ -235,7 +331,9 @@ export default function StudentDetailsScreen() {
         setStudent({ ...student, status: nextStatus });
         setConfirmationAction(null);
         showAppAlert(
-          action === "activate" ? "Student activated" : "Student marked inactive",
+          action === "activate"
+            ? "Student activated"
+            : "Student marked inactive",
           action === "activate"
             ? "Student is back on the active roster."
             : "Student will no longer appear in the active roster.",
@@ -244,18 +342,36 @@ export default function StudentDetailsScreen() {
         return;
       }
 
-      const relatedTables = [
+      // Delete dependent payment rows before fee rows to satisfy the FK.
+      const { data: feeRows, error: feeLookupError } = await supabase
+        .from("institute_student_fees")
+        .select("id")
+        .eq("student_id", student.id)
+        .eq("institute_id", student.institute_id);
+      if (feeLookupError) throw feeLookupError;
+      const feeIds = (feeRows ?? []).map((row) => row.id).filter(Boolean);
+      if (feeIds.length) {
+        const { error } = await supabase
+          .from("institute_fee_payments")
+          .delete()
+          .in("student_fee_id", feeIds);
+        if (error) throw error;
+      }
+      for (const table of [
         "institute_student_batches",
         "institute_student_subjects",
-        "institute_student_fees",
-      ] as const;
-
-      for (const table of relatedTables) {
+      ] as const) {
         const { error } = await supabase
           .from(table)
           .delete()
           .eq("student_id", student.id);
-
+        if (error) throw error;
+      }
+      if (feeIds.length) {
+        const { error } = await supabase
+          .from("institute_student_fees")
+          .delete()
+          .in("id", feeIds);
         if (error) throw error;
       }
 
@@ -298,6 +414,101 @@ export default function StudentDetailsScreen() {
           () => router.replace("/students"),
         );
       }
+    }
+  };
+
+  const collectPayment = async () => {
+    if (!student || !fee?.id || paymentSaving) return;
+    const amountToPay = Number(paymentAmount);
+    if (!Number.isFinite(amountToPay) || amountToPay <= 0) {
+      showAppAlert(
+        "Invalid amount",
+        "Enter a payment amount greater than zero.",
+        "error",
+      );
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate)) {
+      showAppAlert(
+        "Invalid date",
+        "Enter the payment date as YYYY-MM-DD.",
+        "error",
+      );
+      return;
+    }
+    const parsedDate = parseLocalDate(paymentDate);
+    if (
+      Number.isNaN(parsedDate.getTime()) ||
+      localDateString(parsedDate) !== paymentDate
+    ) {
+      showAppAlert("Invalid date", "Enter a valid calendar date.", "error");
+      return;
+    }
+
+    setPaymentSaving(true);
+    try {
+      const { data: currentPayments, error: readError } = await supabase
+        .from("institute_fee_payments")
+        .select("amount_paid")
+        .eq("institute_id", student.institute_id)
+        .eq("student_fee_id", fee.id);
+      if (readError) throw readError;
+
+      const alreadyCollected = (currentPayments ?? []).reduce(
+        (sum, row) => sum + Number(row.amount_paid ?? 0),
+        0,
+      );
+      if (
+        amountToPay >
+        Math.max(0, Number(fee.fee_amount) - alreadyCollected) + 0.009
+      ) {
+        throw new Error(
+          `Amount exceeds remaining fee balance of ₹${Math.max(0, Number(fee.fee_amount) - alreadyCollected).toLocaleString("en-IN")}.`,
+        );
+      }
+
+      const { data: receiptNumber, error: receiptError } = await supabase.rpc(
+        "next_fee_receipt_number",
+      );
+      if (receiptError) throw receiptError;
+
+      const periodStart = student.admission_date || paymentDate;
+      const { data: inserted, error: insertError } = await supabase
+        .from("institute_fee_payments")
+        .insert({
+          institute_id: student.institute_id,
+          student_id: student.id,
+          student_fee_id: fee.id,
+          billing_period_start: periodStart,
+          billing_period_end: paymentDate,
+          amount_due: Number(fee.fee_amount),
+          amount_paid: Math.round(amountToPay * 100) / 100,
+          payment_date: paymentDate,
+          payment_method: paymentMethod,
+          receipt_number:
+            typeof receiptNumber === "string" ? receiptNumber : null,
+          notes: paymentNotes.trim() || null,
+        })
+        .select("id")
+        .single();
+      if (insertError) throw insertError;
+      if (!inserted) throw new Error("Payment was not saved. Please retry.");
+
+      setShowPayment(false);
+      showAppAlert(
+        "Payment recorded",
+        `₹${amountToPay.toLocaleString("en-IN")} has been recorded for ${student.full_name}.`,
+        "success",
+      );
+      await loadStudent();
+    } catch (error: any) {
+      showAppAlert(
+        "Payment not saved",
+        error?.message || "Unable to record this payment.",
+        "error",
+      );
+    } finally {
+      setPaymentSaving(false);
     }
   };
 
@@ -437,7 +648,7 @@ export default function StudentDetailsScreen() {
               style={styles.whatsappButton}
               onPress={() => void openContact("wa")}
             >
-              <Feather name="message-circle" size={23} color="#FFFFFF" />
+              <FontAwesome name="whatsapp" size={25} color="#FFFFFF" />
               <Text style={styles.whatsappText}>WhatsApp</Text>
             </Pressable>
 
@@ -456,11 +667,15 @@ export default function StudentDetailsScreen() {
           <View style={styles.feeStats}>
             <View style={styles.feeStat}>
               <Text style={styles.statLabel}>Pending</Text>
-              <Text style={styles.pendingAmount}>—</Text>
+              <Text style={styles.pendingAmount}>
+                ₹{feePending.toLocaleString("en-IN")}
+              </Text>
             </View>
             <View style={styles.feeStat}>
               <Text style={styles.statLabel}>Collected</Text>
-              <Text style={styles.collectedAmount}>—</Text>
+              <Text style={styles.collectedAmount}>
+                ₹{feeCollected.toLocaleString("en-IN")}
+              </Text>
             </View>
             <View style={styles.feeStat}>
               <Text style={styles.statLabel}>Fee amount</Text>
@@ -470,9 +685,37 @@ export default function StudentDetailsScreen() {
             </View>
           </View>
           <Text style={styles.helperText}>
-            Pending and collected totals will appear when payment records are
-            connected.
+            Pending and collected totals are calculated from linked fee payment
+            records.
           </Text>
+        </View>
+
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Enrolled subjects</Text>
+          {subjectNames.length ? (
+            <View style={styles.subjectGrid}>
+              {subjectNames.map((name) => (
+                <View key={name} style={styles.subjectCard}>
+                  <View style={styles.subjectIconWrap}>
+                    <Feather name="book-open" size={17} color={blue} />
+                  </View>
+                  <Text style={styles.subjectCardName} numberOfLines={2}>
+                    {name}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.helperText}>
+              No subjects assigned to this student.
+            </Text>
+          )}
+          <View style={[styles.infoLine, { marginTop: 16 }]}>
+            <Text style={styles.infoLabel}>Batches</Text>
+            <Text style={styles.infoValue}>
+              {batchNames.join(", ") || "No batches assigned"}
+            </Text>
+          </View>
         </View>
 
         <View style={styles.actionsCard}>
@@ -530,11 +773,10 @@ export default function StudentDetailsScreen() {
               </Text>
               <Text style={styles.paymentPeriod}>
                 {fee
-                  ? `${frequency || "Fee frequency not specified"}`
+                  ? `${frequency || "Fee frequency not specified"} · Total collected ₹${feeCollected.toLocaleString("en-IN")}`
                   : "Add a fee configuration to get started"}
               </Text>
             </View>
-
             <View style={styles.paymentRight}>
               <Text style={styles.paymentAmount}>
                 ₹{amount.toLocaleString("en-IN")}
@@ -546,6 +788,87 @@ export default function StudentDetailsScreen() {
               </View>
             </View>
           </View>
+
+          <View style={styles.monthHistoryHeader}>
+            <Text style={styles.monthHistoryTitle}>Month-wise fee history</Text>
+            <Text style={styles.monthHistoryCaption}>Paid and remaining</Text>
+          </View>
+          {(() => {
+            const valueOf = (r: PaymentRow) =>
+              Number(
+                r.amount_paid ??
+                  r.paid_amount ??
+                  r.amount ??
+                  r.payment_amount ??
+                  0,
+              );
+            const monthKey = (r: PaymentRow) => {
+              const raw = String(r.payment_date ?? r.created_at ?? "").slice(
+                0,
+                10,
+              );
+              return /^\d{4}-\d{2}-\d{2}$/.test(raw)
+                ? raw.slice(0, 7)
+                : "unknown";
+            };
+            const totals = new Map<string, number>();
+            payments.forEach((row) => {
+              const key = monthKey(row);
+              if (key !== "unknown")
+                totals.set(
+                  key,
+                  (totals.get(key) ?? 0) + Math.max(0, valueOf(row)),
+                );
+            });
+            const now = new Date();
+            const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+            if (fee && !totals.has(currentKey)) totals.set(currentKey, 0);
+            const months = [...totals.keys()].sort((a, b) =>
+              b.localeCompare(a),
+            );
+            if (!fee)
+              return (
+                <Text style={styles.helperText}>
+                  Fee configuration is required to calculate monthly unpaid
+                  amounts.
+                </Text>
+              );
+            if (!months.length)
+              return (
+                <Text style={styles.helperText}>
+                  No payments recorded yet. Current month unpaid: ₹
+                  {amount.toLocaleString("en-IN")}.
+                </Text>
+              );
+            return months.map((key) => {
+              const paid = totals.get(key) ?? 0;
+              const unpaid = Math.max(0, amount - paid);
+              const [year, month] = key.split("-").map(Number);
+              const label = new Date(year, month - 1, 1).toLocaleDateString(
+                "en-IN",
+                { month: "long", year: "numeric" },
+              );
+              return (
+                <View key={key} style={styles.monthHistoryRow}>
+                  <View style={styles.monthHistoryMain}>
+                    <Text style={styles.paymentMonth}>{label}</Text>
+                    <Text style={styles.paymentPeriod}>
+                      {payments.filter((row) => monthKey(row) === key).length}{" "}
+                      payment(s)
+                    </Text>
+                  </View>
+                  <View style={styles.monthAmounts}>
+                    <Text style={styles.monthPaid}>
+                      Paid ₹{paid.toLocaleString("en-IN")}
+                    </Text>
+                    <Text style={styles.monthUnpaid}>
+                      Unpaid ₹{unpaid.toLocaleString("en-IN")}
+                    </Text>
+                  </View>
+                </View>
+              );
+            });
+          })()}
         </View>
 
         <View style={styles.studentInfoCard}>
@@ -570,6 +893,48 @@ export default function StudentDetailsScreen() {
               {student.phone || "Not provided"}
             </Text>
           </View>
+          <View style={styles.infoLine}>
+            <Text style={styles.infoLabel}>Father's name</Text>
+            <Text style={styles.infoValue}>
+              {student.father_name || "Not provided"}
+            </Text>
+          </View>
+          <View style={styles.infoLine}>
+            <Text style={styles.infoLabel}>School</Text>
+            <Text style={styles.infoValue}>
+              {student.school_name || "Not provided"}
+            </Text>
+          </View>
+          <View style={styles.infoLine}>
+            <Text style={styles.infoLabel}>Gender</Text>
+            <Text style={styles.infoValue}>
+              {student.gender || "Not provided"}
+            </Text>
+          </View>
+          <View style={styles.infoLine}>
+            <Text style={styles.infoLabel}>Date of birth</Text>
+            <Text style={styles.infoValue}>
+              {student.date_of_birth || "Not provided"}
+            </Text>
+          </View>
+          <View style={styles.infoLine}>
+            <Text style={styles.infoLabel}>Admission date</Text>
+            <Text style={styles.infoValue}>
+              {student.admission_date || "Not provided"}
+            </Text>
+          </View>
+          <View style={styles.infoLine}>
+            <Text style={styles.infoLabel}>Blood group</Text>
+            <Text style={styles.infoValue}>
+              {student.blood_group || "Not provided"}
+            </Text>
+          </View>
+          <View style={styles.infoLine}>
+            <Text style={styles.infoLabel}>Address</Text>
+            <Text style={styles.infoValue}>
+              {student.address || "Not provided"}
+            </Text>
+          </View>
         </View>
 
         <View style={{ height: 100 }} />
@@ -577,11 +942,307 @@ export default function StudentDetailsScreen() {
 
       <Pressable
         style={styles.fab}
-        onPress={() => showNotConnected("Add payment entry")}
+        onPress={() => {
+          if (!fee?.id) {
+            showAppAlert(
+              "Fee not configured",
+              "Configure a fee for this student before collecting a payment.",
+              "warning",
+            );
+            return;
+          }
+          setPaymentAmount(String(Math.max(0, feePending || amount)));
+          setPaymentDate(new Date().toISOString().slice(0, 10));
+          setPaymentMethod("cash");
+          setPaymentNotes("");
+          setShowPayment(true);
+        }}
       >
         <Feather name="plus" size={25} color="#FFFFFF" />
         <Text style={styles.fabText}>Add Entry</Text>
       </Pressable>
+
+      <Modal
+        visible={showPayment}
+        transparent
+        animationType="slide"
+        onRequestClose={() => !paymentSaving && setShowPayment(false)}
+      >
+        <View style={styles.paymentOverlay}>
+          <Pressable
+            style={styles.paymentBackdrop}
+            onPress={() => !paymentSaving && setShowPayment(false)}
+          />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={styles.paymentKeyboard}
+          >
+            <View style={styles.paymentSheet}>
+              <View style={styles.paymentHandle} />
+              <View style={styles.paymentModalHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.paymentModalTitle}>Collect payment</Text>
+                  <Text style={styles.paymentModalSubtitle}>
+                    {student.full_name} · Roll {student.roll_number}
+                  </Text>
+                </View>
+                <Pressable
+                  style={styles.paymentClose}
+                  disabled={paymentSaving}
+                  onPress={() => setShowPayment(false)}
+                >
+                  <Feather name="x" size={21} color={navy} />
+                </Pressable>
+              </View>
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.paymentSummary}>
+                  <View style={styles.paymentSummaryItem}>
+                    <Text style={styles.paymentLabel}>Fee amount</Text>
+                    <Text style={styles.paymentValue}>
+                      ₹{amount.toLocaleString("en-IN")}
+                    </Text>
+                  </View>
+                  <View style={styles.paymentSummaryItem}>
+                    <Text style={styles.paymentLabel}>Collected</Text>
+                    <Text style={[styles.paymentValue, { color: "#16864A" }]}>
+                      ₹{feeCollected.toLocaleString("en-IN")}
+                    </Text>
+                  </View>
+                  <View style={styles.paymentSummaryItem}>
+                    <Text style={styles.paymentLabel}>Pending</Text>
+                    <Text style={[styles.paymentValue, { color: "#D9485F" }]}>
+                      ₹{feePending.toLocaleString("en-IN")}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.paymentInputLabel}>
+                  Amount received (₹)
+                </Text>
+                <TextInput
+                  value={paymentAmount}
+                  onChangeText={setPaymentAmount}
+                  keyboardType="decimal-pad"
+                  placeholder="Enter amount"
+                  placeholderTextColor={muted}
+                  style={styles.paymentInput}
+                  editable={!paymentSaving}
+                />
+                <Text style={styles.paymentInputLabel}>Payment date</Text>
+                <Pressable
+                  style={styles.paymentDateButton}
+                  onPress={() => {
+                    setCalendarMonth(parseLocalDate(paymentDate));
+                    setShowCalendar(true);
+                  }}
+                  disabled={paymentSaving}
+                >
+                  <Feather name="calendar" size={18} color={navy} />
+                  <Text style={styles.paymentDateText}>
+                    {parseLocalDate(paymentDate).toLocaleDateString("en-IN", {
+                      day: "2-digit",
+                      month: "long",
+                      year: "numeric",
+                    })}
+                  </Text>
+                  <Feather name="chevron-down" size={18} color={navy} />
+                </Pressable>
+                <Text style={styles.paymentInputLabel}>Payment method</Text>
+                <View style={styles.paymentMethods}>
+                  {(
+                    [
+                      { label: "Cash", value: "cash", icon: "credit-card" },
+                      { label: "UPI", value: "upi", icon: "smartphone" },
+                      {
+                        label: "Bank",
+                        value: "bank_transfer",
+                        icon: "briefcase",
+                      },
+                    ] as const
+                  ).map((option) => (
+                    <Pressable
+                      key={option.value}
+                      style={[
+                        styles.paymentMethod,
+                        paymentMethod === option.value &&
+                          styles.paymentMethodActive,
+                      ]}
+                      onPress={() => setPaymentMethod(option.value)}
+                      disabled={paymentSaving}
+                    >
+                      <Feather
+                        name={option.icon}
+                        size={16}
+                        color={
+                          paymentMethod === option.value ? "#FFFFFF" : navy
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.paymentMethodText,
+                          paymentMethod === option.value &&
+                            styles.paymentMethodTextActive,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <Text style={styles.paymentInputLabel}>Note (optional)</Text>
+                <TextInput
+                  value={paymentNotes}
+                  onChangeText={setPaymentNotes}
+                  placeholder="Transaction reference or remarks"
+                  placeholderTextColor={muted}
+                  style={[styles.paymentInput, styles.paymentNotes]}
+                  multiline
+                  editable={!paymentSaving}
+                />
+                <Pressable
+                  style={[
+                    styles.paymentSubmit,
+                    paymentSaving && { opacity: 0.6 },
+                  ]}
+                  onPress={() => void collectPayment()}
+                  disabled={paymentSaving}
+                >
+                  {paymentSaving ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Feather name="check-circle" size={19} color="#FFFFFF" />
+                      <Text style={styles.paymentSubmitText}>
+                        Confirm payment
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showCalendar}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCalendar(false)}
+      >
+        <View style={styles.calendarOverlay}>
+          <Pressable
+            style={styles.calendarBackdrop}
+            onPress={() => setShowCalendar(false)}
+          />
+          <View style={styles.calendarCard}>
+            <View style={styles.calendarHeader}>
+              <Pressable
+                onPress={() =>
+                  setCalendarMonth(
+                    new Date(
+                      calendarMonth.getFullYear(),
+                      calendarMonth.getMonth() - 1,
+                      1,
+                    ),
+                  )
+                }
+                style={styles.calendarArrow}
+              >
+                <Feather name="chevron-left" size={22} color={navy} />
+              </Pressable>
+              <Text style={styles.calendarTitle}>
+                {calendarMonth.toLocaleDateString("en-IN", {
+                  month: "long",
+                  year: "numeric",
+                })}
+              </Text>
+              <Pressable
+                onPress={() =>
+                  setCalendarMonth(
+                    new Date(
+                      calendarMonth.getFullYear(),
+                      calendarMonth.getMonth() + 1,
+                      1,
+                    ),
+                  )
+                }
+                style={styles.calendarArrow}
+              >
+                <Feather name="chevron-right" size={22} color={navy} />
+              </Pressable>
+            </View>
+            <View style={styles.calendarGrid}>
+              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                <Text key={day} style={styles.calendarWeekday}>
+                  {day}
+                </Text>
+              ))}
+              {Array.from({ length: calendarMonth.getDay() }, (_, index) => (
+                <View key={`blank-${index}`} style={styles.calendarDayBlank} />
+              ))}
+              {Array.from(
+                {
+                  length: new Date(
+                    calendarMonth.getFullYear(),
+                    calendarMonth.getMonth() + 1,
+                    0,
+                  ).getDate(),
+                },
+                (_, index) => {
+                  const day = index + 1;
+                  const date = new Date(
+                    calendarMonth.getFullYear(),
+                    calendarMonth.getMonth(),
+                    day,
+                  );
+                  const value = localDateString(date);
+                  const selected = value === paymentDate;
+                  return (
+                    <Pressable
+                      key={value}
+                      style={[
+                        styles.calendarDay,
+                        selected && styles.calendarDaySelected,
+                      ]}
+                      onPress={() => {
+                        setPaymentDate(value);
+                        setShowCalendar(false);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.calendarDayText,
+                          selected && styles.calendarDayTextSelected,
+                        ]}
+                      >
+                        {day}
+                      </Text>
+                    </Pressable>
+                  );
+                },
+              )}
+            </View>
+            <View style={styles.calendarFooter}>
+              <Pressable
+                onPress={() => {
+                  const today = new Date();
+                  setPaymentDate(localDateString(today));
+                  setCalendarMonth(today);
+                  setShowCalendar(false);
+                }}
+              >
+                <Text style={styles.calendarToday}>Today</Text>
+              </Pressable>
+              <Pressable onPress={() => setShowCalendar(false)}>
+                <Text style={styles.calendarCancel}>Cancel</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={menuVisible}
@@ -727,7 +1388,9 @@ export default function StudentDetailsScreen() {
                       : "slash"
                 }
                 size={38}
-                color={confirmationAction === "activate" ? "#4CAF50" : "#DC3B3B"}
+                color={
+                  confirmationAction === "activate" ? "#4CAF50" : "#DC3B3B"
+                }
               />
             </View>
 
@@ -815,7 +1478,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 22,
-    backgroundColor: "#2D4158",
+    backgroundColor: "#611CD0",
   },
   profile: {
     flexDirection: "row",
@@ -827,7 +1490,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 25,
-    backgroundColor: "#EAF1F7",
+    backgroundColor: "#F3EEFF",
   },
   avatarPlaceholder: { alignItems: "center", justifyContent: "center" },
   profileInfo: { flex: 1, gap: 5 },
@@ -865,7 +1528,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    backgroundColor: "#006eff",
+    backgroundColor: "#611CD0",
     borderRadius: 19,
   },
   callText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
@@ -888,16 +1551,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   statLabel: { color: muted, fontSize: 12, fontWeight: "600" },
-  pendingAmount: { color: navy, fontSize: 25, fontWeight: "800", marginTop: 8 },
+  pendingAmount: { color: navy, fontSize: 22, fontWeight: "800", marginTop: 8 },
   collectedAmount: {
     color: "#3F7D4C",
-    fontSize: 25,
+    fontSize: 22,
     fontWeight: "800",
     marginTop: 8,
   },
   upcomingAmount: {
     color: blue,
-    fontSize: 23,
+    fontSize: 22,
     fontWeight: "800",
     marginTop: 8,
   },
@@ -919,7 +1582,7 @@ const styles = StyleSheet.create({
     width: 58,
     height: 58,
     borderRadius: 19,
-    backgroundColor: "#EDF2F7",
+    backgroundColor: "#F3EEFF",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -949,12 +1612,60 @@ const styles = StyleSheet.create({
   paymentRight: { alignItems: "flex-end", gap: 8 },
   paymentAmount: { color: navy, fontSize: 19, fontWeight: "800" },
   upcomingBadge: {
-    backgroundColor: "#E7EFFC",
+    backgroundColor: "#F3EEFF",
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 18,
   },
   upcomingBadgeText: { color: blue, fontSize: 12, fontWeight: "800" },
+  monthHistoryHeader: { marginTop: 24, marginBottom: 8, gap: 4 },
+  monthHistoryTitle: { color: navy, fontSize: 16, fontWeight: "800" },
+  monthHistoryCaption: { color: muted, fontSize: 12 },
+  monthHistoryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EEEAF8",
+  },
+  monthHistoryMain: { flex: 1, gap: 5 },
+  monthAmounts: { alignItems: "flex-end", gap: 5 },
+  monthPaid: { color: "#23834A", fontSize: 13, fontWeight: "800" },
+  monthUnpaid: { color: "#C24155", fontSize: 13, fontWeight: "700" },
+  subjectGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 9,
+    marginTop: 16,
+  },
+  subjectCard: {
+    width: "31%",
+    minHeight: 105,
+    padding: 10,
+    borderRadius: 16,
+    backgroundColor: "#F7F4FF",
+    borderWidth: 1,
+    borderColor: "#E8E3F5",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+  },
+  subjectIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 11,
+    backgroundColor: "#EDE5FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  subjectCardName: {
+    color: navy,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "800",
+    marginTop: 9,
+  },
   studentInfoCard: {
     backgroundColor: "#FFFFFF",
     marginTop: 16,
@@ -1164,6 +1875,179 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   fabText: { color: "#FFFFFF", fontSize: 17, fontWeight: "800" },
+  paymentOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(12, 18, 35, 0.5)",
+  },
+  paymentBackdrop: { ...StyleSheet.absoluteFill },
+  paymentKeyboard: { justifyContent: "flex-end" },
+  paymentSheet: {
+    backgroundColor: bg,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === "ios" ? 30 : 22,
+    maxHeight: "92%",
+  },
+  paymentHandle: {
+    width: 42,
+    height: 5,
+    borderRadius: 5,
+    backgroundColor: "#CBD5E1",
+    alignSelf: "center",
+    marginBottom: 16,
+  },
+  paymentModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 16,
+  },
+  paymentModalTitle: { color: navy, fontSize: 21, fontWeight: "800" },
+  paymentModalSubtitle: { color: muted, fontSize: 12, marginTop: 4 },
+  paymentClose: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "#E9E3F8",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  paymentSummary: {
+    flexDirection: "row",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    paddingVertical: 14,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: "#E8E2F5",
+  },
+  paymentSummaryItem: { flex: 1, alignItems: "center" },
+  paymentLabel: { color: muted, fontSize: 10, marginBottom: 6 },
+  paymentValue: { color: navy, fontSize: 13, fontWeight: "800" },
+  paymentInputLabel: {
+    color: navy,
+    fontSize: 12,
+    fontWeight: "800",
+    marginBottom: 7,
+    marginTop: 4,
+  },
+  paymentInput: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2D9F4",
+    borderRadius: 12,
+    minHeight: 48,
+    paddingHorizontal: 14,
+    color: navy,
+    fontSize: 14,
+    marginBottom: 15,
+  },
+  paymentMethods: { flexDirection: "row", gap: 8, marginBottom: 16 },
+  paymentMethod: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2D9F4",
+    backgroundColor: "#FFFFFF",
+    paddingVertical: 13,
+  },
+  paymentMethodActive: { backgroundColor: navy, borderColor: navy },
+  paymentMethodText: { color: navy, fontSize: 11, fontWeight: "800" },
+  paymentMethodTextActive: { color: "#FFFFFF" },
+  paymentNotes: { minHeight: 75, textAlignVertical: "top", paddingTop: 12 },
+  paymentSubmit: {
+    minHeight: 52,
+    borderRadius: 14,
+    backgroundColor: navy,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 9,
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  paymentSubmitText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
+  paymentDateButton: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2D9F4",
+    borderRadius: 12,
+    minHeight: 50,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 15,
+  },
+  paymentDateText: { flex: 1, color: navy, fontSize: 14, fontWeight: "700" },
+  calendarOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 22,
+    backgroundColor: "rgba(12, 18, 35, 0.55)",
+  },
+calendarBackdrop: {
+  ...StyleSheet.absoluteFill,
+},
+  calendarCard: {
+    width: "100%",
+    maxWidth: 380,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 18,
+    elevation: 12,
+  },
+  calendarHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 18,
+  },
+  calendarArrow: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#F3F0FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  calendarTitle: { color: navy, fontSize: 17, fontWeight: "800" },
+  calendarGrid: { flexDirection: "row", flexWrap: "wrap" },
+  calendarWeekday: {
+    width: "14.2857%",
+    textAlign: "center",
+    color: muted,
+    fontSize: 12,
+    fontWeight: "800",
+    paddingVertical: 10,
+  },
+  calendarDayBlank: { width: "14.2857%", height: 42 },
+  calendarDay: {
+    width: "14.2857%",
+    height: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 21,
+  },
+  calendarDaySelected: { backgroundColor: blue },
+  calendarDayText: { color: "#26384A", fontSize: 14, fontWeight: "600" },
+  calendarDayTextSelected: { color: "#FFFFFF", fontWeight: "800" },
+  calendarFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 18,
+    paddingHorizontal: 4,
+  },
+  calendarToday: { color: blue, fontWeight: "800", fontSize: 14 },
+  calendarCancel: { color: muted, fontWeight: "700", fontSize: 14 },
   backButton: {
     backgroundColor: navy,
     paddingHorizontal: 22,

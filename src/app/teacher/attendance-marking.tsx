@@ -12,6 +12,7 @@ import {
 } from "react-native";
 
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 
@@ -21,11 +22,16 @@ import { supabase } from "../../lib/supabase";
 
 import AppAlert, { type AppAlertType } from "../../components/AppAlert";
 
-const NAVY = "#202F42",
-  BG = "#F1F5F8",
-  WHITE = "#FFFFFF",
-  MUTED = "#9DB1BE",
-  BORDER = "#E1E8EF";
+const PURPLE = "#611CD0";
+const PURPLE_DARK = "#44109D";
+const PURPLE_BRIGHT = "#4C02F7";
+const BLUE = PURPLE;
+const NAVY = "#241344";
+const BG = "#F3F3FF";
+const WHITE = "#FFFFFF";
+const MUTED = "#718096";
+const BORDER = "#E8E3F5";
+const GREEN = "#18845D";
 
 const OPTIONS = [
   {
@@ -329,26 +335,36 @@ export default function TeacherAttendanceMarkingScreen() {
         .sort(rollSort);
 
       // Resolve paths saved in institute_students.photo_path. The bucket is public,
+
       // so use getPublicUrl rather than creating signed URLs.
+
       const normalizeStudentPhotoPath = (rawPath: string): string | null => {
         let path = rawPath.trim();
+
         if (!path) return null;
 
         if (/^https?:\/\//i.test(path)) {
           try {
             const parsed = new URL(path);
+
             const markers = [
               "/storage/v1/object/sign/student-photos/",
+
               "/storage/v1/object/public/student-photos/",
+
               "/storage/v1/object/authenticated/student-photos/",
             ];
+
             const marker = markers.find((item) =>
               parsed.pathname.includes(item),
             );
+
             if (!marker) return null;
+
             path = parsed.pathname.slice(
               parsed.pathname.indexOf(marker) + marker.length,
             );
+
             path = decodeURIComponent(path);
           } catch {
             return null;
@@ -357,32 +373,42 @@ export default function TeacherAttendanceMarkingScreen() {
 
         path = decodeURIComponent(path.split("?")[0])
           .replace(/^\/+/, "")
-          .replace(/^student-photos\//, "");
+
+          .replace(/^student-photos\/+/, "");
 
         // photo_path values in this database already include instituteId/.
+
         if (!path.startsWith(`${iid}/`)) path = `${iid}/${path}`;
+
         return path;
       };
 
       const withPhotoUrls = enrolled.map((student) => {
         const storedPath = student.photo_path?.trim();
+
         if (!storedPath) return { ...student, photo_url: null };
 
         const objectPath = normalizeStudentPhotoPath(storedPath);
+
         if (!objectPath) {
           console.warn(
             `Unrecognized student photo path for ${student.id}:`,
+
             storedPath,
           );
+
           return { ...student, photo_url: null };
         }
 
         const { data } = supabase.storage
+
           .from("student-photos")
+
           .getPublicUrl(objectPath);
 
         return { ...student, photo_url: data.publicUrl };
       });
+
       setFailedPhotos({});
 
       setStudents(withPhotoUrls);
@@ -414,6 +440,7 @@ export default function TeacherAttendanceMarkingScreen() {
       for (const row of (existing ?? []) as RecordRow[]) {
         const normalized = String(row.status ?? "")
           .toLowerCase()
+
           .trim();
 
         if (validStatuses.has(normalized)) {
@@ -573,13 +600,16 @@ export default function TeacherAttendanceMarkingScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="dark-content" backgroundColor={WHITE} />
+      <StatusBar barStyle="light-content" backgroundColor={PURPLE_DARK} />
 
-      <View
+      <LinearGradient
+        colors={[PURPLE, PURPLE_DARK, PURPLE_BRIGHT]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={[styles.header, { paddingTop: Math.max(insets.top, 12) + 8 }]}
       >
         <Pressable style={styles.back} onPress={() => router.back()}>
-          <Feather name="chevron-left" size={29} color={NAVY} />
+          <Feather name="chevron-left" size={29} color={WHITE} />
         </Pressable>
 
         <View style={styles.headerText}>
@@ -594,7 +624,7 @@ export default function TeacherAttendanceMarkingScreen() {
             {asText(params.periodNumber)}
           </Text>
         </View>
-      </View>
+      </LinearGradient>
 
       <View style={styles.statsRow}>
         {OPTIONS.map((o) => (
@@ -670,6 +700,7 @@ export default function TeacherAttendanceMarkingScreen() {
                   <Text
                     style={[
                       styles.currentStatus,
+
                       selected
                         ? {
                             color:
@@ -780,47 +811,42 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: BG },
 
   header: {
-    backgroundColor: WHITE,
-
-    paddingHorizontal: 22,
-
+    paddingHorizontal: 20,
     paddingBottom: 20,
-
     flexDirection: "row",
-
     alignItems: "center",
-
     gap: 12,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: "hidden",
   },
 
   back: {
-    width: 44,
-
-    height: 54,
-
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.22)",
     alignItems: "center",
-
     justifyContent: "center",
   },
 
   headerText: { flex: 1 },
 
-  title: { color: NAVY, fontSize: 23, fontWeight: "900" },
+  title: { color: WHITE, fontSize: 23, fontWeight: "900" },
 
-  subtitle: { color: MUTED, fontSize: 15, fontWeight: "700", marginTop: 3 },
+  subtitle: { color: "#E9DEFF", fontSize: 13, fontWeight: "700", marginTop: 4 },
 
-  submeta: { color: "#718096", fontSize: 12, marginTop: 3 },
+  submeta: { color: "#D5C6FF", fontSize: 11, marginTop: 5 },
 
   statsRow: {
-    backgroundColor: WHITE,
-
-    paddingHorizontal: 12,
-
-    paddingBottom: 18,
-
+    backgroundColor: BG,
+    paddingHorizontal: 14,
+    paddingTop: 15,
+    paddingBottom: 4,
     flexDirection: "row",
-
-    gap: 6,
+    gap: 7,
   },
 
   statCard: {
@@ -858,6 +884,12 @@ const styles = StyleSheet.create({
 
     borderColor: BORDER,
 
+    shadowColor: "#4C02F7",
+    shadowOpacity: 0.045,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+
     flexDirection: "row",
 
     alignItems: "center",
@@ -872,7 +904,7 @@ const styles = StyleSheet.create({
 
     borderRadius: 16,
 
-    backgroundColor: "#E7EEF5",
+    backgroundColor: "#EDE7FF",
 
     alignItems: "center",
 
@@ -883,7 +915,7 @@ const styles = StyleSheet.create({
 
   avatarImage: { width: "100%", height: "100%" },
 
-  avatarText: { color: NAVY, fontSize: 20, fontWeight: "900" },
+  avatarText: { color: PURPLE, fontSize: 20, fontWeight: "900" },
 
   studentInfo: { flex: 1, minWidth: 70 },
 
@@ -893,8 +925,11 @@ const styles = StyleSheet.create({
 
   currentStatus: {
     color: MUTED,
-    fontSize: 11,
+
+    fontSize: 10,
+
     fontWeight: "800",
+
     marginTop: 4,
   },
 
@@ -969,7 +1004,7 @@ const styles = StyleSheet.create({
   markAll: {
     borderWidth: 2,
 
-    borderColor: "#DCE6ED",
+    borderColor: "#D9C9FF",
 
     borderRadius: 18,
 
@@ -980,16 +1015,21 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  markAllText: { color: "#43814A", fontSize: 14, fontWeight: "800" },
+  markAllText: { color: PURPLE, fontSize: 14, fontWeight: "800" },
 
   saveButton: {
     flex: 1,
 
-    backgroundColor: NAVY,
+    backgroundColor: PURPLE,
 
-    borderRadius: 16,
+    borderRadius: 17,
 
-    minHeight: 60,
+    minHeight: 58,
+    shadowColor: PURPLE,
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
 
     alignItems: "center",
 

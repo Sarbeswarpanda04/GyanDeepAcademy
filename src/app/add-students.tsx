@@ -154,14 +154,14 @@ export default function AddStudentsScreen() {
     | null
   >(null);
   const [calendarMonth, setCalendarMonth] = useState(new Date());
-const [showYearPicker, setShowYearPicker] = useState(false);
+  const [showYearPicker, setShowYearPicker] = useState(false);
 
-const currentYear = new Date().getFullYear();
+  const currentYear = new Date().getFullYear();
 
-const yearOptions = Array.from(
-  { length: currentYear - 1899 },
-  (_, index) => currentYear - index,
-);
+  const yearOptions = Array.from(
+    { length: currentYear + 11 - 1900 },
+    (_, index) => currentYear + 10 - index,
+  );
 
   const [notice, setNotice] = useState<{
     title: string;
@@ -920,16 +920,14 @@ const yearOptions = Array.from(
     </View>
   );
 
-const openDate = (kind: "admission" | "dob") => {
-  const selected = kind === "admission" ? admission : dob;
+  const openDate = (kind: "admission" | "dob") => {
+    const selected = kind === "admission" ? admission : dob;
 
-  setCalendarMonth(
-    new Date(`${selected || todayISO()}T12:00:00`),
-  );
+    setCalendarMonth(new Date(`${selected || todayISO()}T12:00:00`));
 
-  setShowYearPicker(false);
-  setPicker(kind);
-};
+    setShowYearPicker(false);
+    setPicker(kind);
+  };
 
   const daysInMonth = new Date(
     calendarMonth.getFullYear(),
@@ -1323,10 +1321,19 @@ const openDate = (kind: "admission" | "dob") => {
         visible={!!picker}
         transparent
         animationType="fade"
-        onRequestClose={() => setPicker(null)}
+        onRequestClose={() => {
+          setPicker(null);
+          setShowYearPicker(false);
+        }}
       >
         <View style={styles.modalRoot}>
-          <Pressable style={styles.shade} onPress={() => setPicker(null)} />
+          <Pressable
+            style={styles.shade}
+            onPress={() => {
+              setPicker(null);
+              setShowYearPicker(false);
+            }}
+          />
           <View style={styles.sheet}>
             <View style={styles.handle} />
             <Text style={styles.sheetTitle}>{modalTitle}</Text>
@@ -1383,80 +1390,206 @@ const openDate = (kind: "admission" | "dob") => {
             )}
 
             {(picker === "admission" || picker === "dob") && (
-              <>
+              <View style={styles.datePicker}>
+                <View style={styles.calendarTop}>
+                  <View>
+                    <Text style={styles.calendarEyebrow}>
+                      {picker === "admission"
+                        ? "ADMISSION DATE"
+                        : "DATE OF BIRTH"}
+                    </Text>
+                    <Text style={styles.calendarHint}>Choose a date</Text>
+                  </View>
+                  <Pressable
+                    style={styles.todayButton}
+                    onPress={() => setCalendarMonth(new Date())}
+                    accessibilityRole="button"
+                    accessibilityLabel="Go to current month"
+                  >
+                    <Feather name="calendar" size={14} color={PURPLE} />
+                    <Text style={styles.todayButtonText}>Today</Text>
+                  </Pressable>
+                </View>
+
                 <View style={styles.monthRow}>
                   <Pressable
-                    onPress={() =>
+                    style={styles.monthArrow}
+                    onPress={() => {
+                      setShowYearPicker(false);
                       setCalendarMonth(
                         new Date(
                           calendarMonth.getFullYear(),
                           calendarMonth.getMonth() - 1,
                           1,
                         ),
-                      )
-                    }
+                      );
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Previous month"
                   >
-                    <Feather name="chevron-left" size={24} color={NAVY} />
+                    <Feather name="chevron-left" size={22} color={PURPLE} />
                   </Pressable>
 
-                  <Text style={styles.monthTitle}>
-                    {calendarMonth.toLocaleDateString("en-US", {
-                      month: "long",
-                      year: "numeric",
-                    })}
-                  </Text>
+                  <Pressable
+                    style={styles.monthTitleButton}
+                    onPress={() => setShowYearPicker((visible) => !visible)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Choose year"
+                    accessibilityState={{ expanded: showYearPicker }}
+                  >
+                    <Text style={styles.monthTitle}>
+                      {calendarMonth.toLocaleDateString("en-US", {
+                        month: "long",
+                        year: "numeric",
+                      })}
+                    </Text>
+                    <Feather
+                      name={showYearPicker ? "chevron-up" : "chevron-down"}
+                      size={17}
+                      color={PURPLE}
+                    />
+                  </Pressable>
 
                   <Pressable
-                    onPress={() =>
+                    style={styles.monthArrow}
+                    onPress={() => {
+                      setShowYearPicker(false);
                       setCalendarMonth(
                         new Date(
                           calendarMonth.getFullYear(),
                           calendarMonth.getMonth() + 1,
                           1,
                         ),
-                      )
-                    }
+                      );
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Next month"
                   >
-                    <Feather name="chevron-right" size={24} color={NAVY} />
+                    <Feather name="chevron-right" size={22} color={PURPLE} />
                   </Pressable>
                 </View>
 
-                <View style={styles.calendar}>
-                  {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => (
-                    <Text key={`${day}${index}`} style={styles.weekday}>
-                      {day}
-                    </Text>
-                  ))}
+                {showYearPicker ? (
+                  <View style={styles.yearPickerPanel}>
+                    <Text style={styles.yearPickerTitle}>Select year</Text>
+                    <ScrollView
+                      style={styles.yearList}
+                      contentContainerStyle={styles.yearListContent}
+                      showsVerticalScrollIndicator
+                      nestedScrollEnabled
+                    >
+                      {yearOptions.map((year) => {
+                        const selectedYear =
+                          calendarMonth.getFullYear() === year;
+                        return (
+                          <Pressable
+                            key={year}
+                            style={[
+                              styles.yearOption,
+                              selectedYear && styles.yearOptionActive,
+                            ]}
+                            onPress={() => {
+                              setCalendarMonth(
+                                new Date(year, calendarMonth.getMonth(), 1),
+                              );
+                              setShowYearPicker(false);
+                            }}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: selectedYear }}
+                          >
+                            <Text
+                              style={[
+                                styles.yearOptionText,
+                                selectedYear && styles.yearOptionTextActive,
+                              ]}
+                            >
+                              {year}
+                            </Text>
+                            {selectedYear && (
+                              <Feather
+                                name="check-circle"
+                                size={19}
+                                color={PURPLE}
+                              />
+                            )}
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                ) : (
+                  <>
+                    <View style={styles.calendar}>
+                      {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => (
+                        <Text key={`${day}${index}`} style={styles.weekday}>
+                          {day}
+                        </Text>
+                      ))}
 
-                  {calendarCells.map((day, index) =>
-                    day === 0 ? (
-                      <View key={`blank${index}`} style={styles.dayCell} />
-                    ) : (
-                      <Pressable
-                        key={day}
-                        style={styles.dayCell}
-                        onPress={() => {
-                          const value = [
-                            calendarMonth.getFullYear(),
-                            String(calendarMonth.getMonth() + 1).padStart(
-                              2,
-                              "0",
-                            ),
-                            String(day).padStart(2, "0"),
-                          ].join("-");
+                      {calendarCells.map((day, index) => {
+                        if (day === 0) {
+                          return (
+                            <View
+                              key={`blank${index}`}
+                              style={styles.dayCell}
+                            />
+                          );
+                        }
 
-                          if (picker === "admission") setAdmission(value);
-                          else setDob(value);
+                        const value = [
+                          calendarMonth.getFullYear(),
+                          String(calendarMonth.getMonth() + 1).padStart(2, "0"),
+                          String(day).padStart(2, "0"),
+                        ].join("-");
+                        const selectedDate =
+                          picker === "admission" ? admission : dob;
+                        const isSelected = value === selectedDate;
+                        const isToday = value === todayISO();
 
-                          setPicker(null);
-                        }}
-                      >
-                        <Text style={styles.dayText}>{day}</Text>
-                      </Pressable>
-                    ),
-                  )}
-                </View>
-              </>
+                        return (
+                          <Pressable
+                            key={day}
+                            style={[
+                              styles.dayCell,
+                              isSelected && styles.dayCellSelected,
+                              !isSelected && isToday && styles.dayCellToday,
+                            ]}
+                            onPress={() => {
+                              if (picker === "admission") setAdmission(value);
+                              else setDob(value);
+                              setShowYearPicker(false);
+                              setPicker(null);
+                            }}
+                            accessibilityRole="button"
+                            accessibilityLabel={`${day} ${calendarMonth.toLocaleDateString("en-US", { month: "long" })} ${calendarMonth.getFullYear()}`}
+                            accessibilityState={{ selected: isSelected }}
+                          >
+                            <Text
+                              style={[
+                                styles.dayText,
+                                isSelected && styles.dayTextSelected,
+                                !isSelected && isToday && styles.dayTextToday,
+                              ]}
+                            >
+                              {day}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                    <View style={styles.calendarFooter}>
+                      <View style={styles.legendDot} />
+                      <Text style={styles.calendarFooterText}>Today</Text>
+                      <View
+                        style={[styles.legendDot, styles.legendDotSelected]}
+                      />
+                      <Text style={styles.calendarFooterText}>
+                        Selected date
+                      </Text>
+                    </View>
+                  </>
+                )}
+              </View>
             )}
 
             {picker === "billing" && (
@@ -1857,7 +1990,86 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 12,
   },
-  monthTitle: { color: NAVY, fontSize: 17, fontWeight: "800" },
+  monthTitle: { color: NAVY, fontSize: 16, fontWeight: "800" },
+  datePicker: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 14,
+    marginBottom: 4,
+  },
+  calendarTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 14,
+  },
+  calendarEyebrow: {
+    color: PURPLE,
+    fontSize: 10,
+    letterSpacing: 1.1,
+    fontWeight: "800",
+    marginBottom: 4,
+  },
+  calendarHint: { color: MUTED, fontSize: 13, fontWeight: "500" },
+  todayButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#F3EEFF",
+    borderRadius: 12,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+  },
+  todayButtonText: { color: PURPLE, fontSize: 12, fontWeight: "800" },
+  monthArrow: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "#F6F2FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  monthTitleButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 12,
+    backgroundColor: "#F3EEFF",
+  },
+  yearPickerPanel: {
+    borderWidth: 1,
+    borderColor: "#E9E0FF",
+    borderRadius: 15,
+    backgroundColor: "#FCFBFF",
+    padding: 10,
+  },
+  yearPickerTitle: {
+    color: NAVY,
+    fontSize: 13,
+    fontWeight: "800",
+    marginBottom: 6,
+    paddingHorizontal: 6,
+  },
+  yearList: { maxHeight: 300 },
+  yearListContent: { paddingBottom: 4 },
+  yearOption: {
+    minHeight: 44,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0ECF8",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderRadius: 10,
+  },
+  yearOptionActive: { backgroundColor: "#F0E8FF" },
+  yearOptionText: { color: TEXT, fontSize: 14, fontWeight: "600" },
+  yearOptionTextActive: { color: PURPLE, fontWeight: "800" },
   calendar: { flexDirection: "row", flexWrap: "wrap" },
   weekday: {
     width: "14.285%",
@@ -1871,8 +2083,35 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     alignItems: "center",
     justifyContent: "center",
+    borderRadius: 13,
+    marginVertical: 1,
   },
-  dayText: { color: "#243345", fontSize: 14, fontWeight: "600" },
+  dayCellSelected: { backgroundColor: PURPLE },
+  dayCellToday: {
+    borderWidth: 1.5,
+    borderColor: "#C4B5FD",
+  },
+  dayText: { color: TEXT, fontSize: 14, fontWeight: "600" },
+  dayTextSelected: { color: WHITE, fontWeight: "800" },
+  dayTextToday: { color: PURPLE, fontWeight: "800" },
+  calendarFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderTopWidth: 1,
+    borderTopColor: "#F0ECF8",
+    marginTop: 10,
+    paddingTop: 12,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#C4B5FD",
+  },
+  legendDotSelected: { backgroundColor: PURPLE, marginLeft: 10 },
+  calendarFooterText: { color: MUTED, fontSize: 11, fontWeight: "600" },
 
   billingGrid: {
     flexDirection: "row",

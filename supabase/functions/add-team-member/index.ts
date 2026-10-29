@@ -192,22 +192,149 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const { data: existing, error: duplicateError } = await admin
+
+    // 1. Block duplicate phone numbers belonging to active team members.
+    const { data: activeDuplicate, error: activeDuplicateError } = await admin
       .from("institute_team_members")
       .select("id")
       .eq("institute_id", instituteId)
       .eq("phone", phone)
+      .eq("is_active", true)
+      .limit(1)
       .maybeSingle();
 
-    if (duplicateError) throw duplicateError;
+    if (activeDuplicateError) throw activeDuplicateError;
 
-    if (existing) {
+    if (activeDuplicate) {
       return response({
         success: false,
-        message: "This mobile number is already registered in the team.",
+        message: "This mobile number is already registered to an active team member.",
       }, 409);
     }
 
+    // 2. Look for a previously deactivated membership with this phone.
+    const { data: inactiveMember, error: inactiveError } = await admin
+      .from("institute_team_members")
+      .select("id, role, staff_id, user_id")
+      .eq("institute_id", instituteId)
+      .eq("phone", phone)
+      .eq("is_active", false)
+      .limit(1)
+      .maybeSingle();
+
+    if (inactiveError) throw inactiveError;
+
+    if (inactiveMember) {
+      // Only reuse the old record for the same role and, for teachers,
+      // the same staff record. Do not transfer an old account accidentally.
+      const sameTeacher =
+  role === "teacher" &&
+  inactiveMember.role === "teacher" &&
+  (
+    inactiveMember.staff_id === staffId ||
+    inactiveMember.staff_id === null
+  );
+
+      const sameNonTeacherRole =
+        role !== "teacher" &&
+        inactiveMember.role === role;
+
+      if (!sameTeacher && !sameNonTeacherRole) {
+        return response({
+          success: false,
+          message:
+            "This phone number belongs to a previously deactivated team member. Please check the old membership before reusing it.",
+        }, 409);
+      }
+
+      // Reactivate the old membership, preserving its ID and Auth identity.
+      const { data: reactivatedMember, error: reactivateError } = await admin
+        .from("institute_team_members")
+        .update({
+          full_name: fullName,
+          phone,
+          role,
+          staff_id: role === "teacher" ? staffId : null,
+          permissions: cleanPermissions,
+          is_active: true,
+        })
+        .eq("id", inactiveMember.id)
+        .eq("institute_id", instituteId)
+        .eq("is_active", false)
+        .select(
+          "id, institute_id, full_name, phone, role, permissions, is_active, user_id"
+        )
+        .maybeSingle();
+
+      if (reactivateError) throw reactivateError;
+
+      if (!reactivatedMember) {
+        return response({
+          success: false,
+          message:
+            "The previous membership could not be reactivated. Refresh the team list and try again.",
+        }, 409);
+      }
+
+      // Update the existing PIN record rather than inserting a duplicate.
+      const { data: existingCredential, error: credentialLookupError } =
+        await admin
+          .from("institute_team_credentials")
+          .select("team_member_id")
+          .eq("team_member_id", inactiveMember.id)
+          .maybeSingle();
+
+      if (credentialLookupError) {
+        // Roll back the reactivation if credential lookup fails.
+        await admin
+          .from("institute_team_members")
+          .update({ is_active: false })
+          .eq("id", inactiveMember.id);
+
+        throw credentialLookupError;
+      }
+
+      if (existingCredential) {
+        const { error: credentialUpdateError } = await admin
+          .from("institute_team_credentials")
+          .update({ login_pin: pin })
+          .eq("team_member_id", inactiveMember.id);
+
+        if (credentialUpdateError) {
+          await admin
+            .from("institute_team_members")
+            .update({ is_active: false })
+            .eq("id", inactiveMember.id);
+
+          throw credentialUpdateError;
+        }
+      } else {
+        // No credential row exists; create one without creating another Auth user.
+        const { error: credentialInsertError } = await admin
+          .from("institute_team_credentials")
+          .insert({
+            team_member_id: inactiveMember.id,
+            login_pin: pin,
+          });
+
+        if (credentialInsertError) {
+          await admin
+            .from("institute_team_members")
+            .update({ is_active: false })
+            .eq("id", inactiveMember.id);
+
+          throw credentialInsertError;
+        }
+      }
+
+      return response({
+        success: true,
+        message: "Previous team membership reactivated successfully.",
+        member: reactivatedMember,
+      });
+    }
+
+    // 3. No previous inactive membership: create a new membership.
     const { data: member, error: insertError } = await admin
       .from("institute_team_members")
       .insert({
@@ -227,13 +354,16 @@ Deno.serve(async (req: Request) => {
       if (insertError.code === "23505") {
         return response({
           success: false,
-          message: "This mobile number is already registered in the team.",
+          message:
+            "This mobile number conflicts with an existing team record. Check the database uniqueness constraints.",
         }, 409);
       }
+
       throw insertError;
     }
 
     createdMemberId = member.id;
+
 
     // Create an internal Auth identity. The teacher never needs this password.
     const authEmail = `member-${member.id}@login.gyandeep.invalid`;

@@ -11,17 +11,22 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
 
-const NAVY = "#1D2D44";
-const BLUE = "#3677D5";
-const BG = "#F4F7FB";
+const PURPLE = "#611CD0";
+const PURPLE_DARK = "#44109D";
+const PURPLE_BRIGHT = "#4C02F7";
+const NAVY = "#241344";
+const BLUE = PURPLE;
+const BG = "#F3F3FF";
 const WHITE = "#FFFFFF";
 const MUTED = "#718096";
-const BORDER = "#E7EDF4";
+const BORDER = "#E8E3F5";
 const GREEN = "#18845D";
+const LAVENDER = "#EDE7FF";
 
 type TeacherLink = {
   id: string;
@@ -307,8 +312,11 @@ export default function TeacherAttendanceScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={NAVY} />
-      <View
+      <StatusBar barStyle="light-content" backgroundColor={PURPLE_DARK} />
+      <LinearGradient
+        colors={[PURPLE, PURPLE_DARK, PURPLE_BRIGHT]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={[styles.header, { paddingTop: Math.max(insets.top, 12) + 8 }]}
       >
         <View style={styles.headerTop}>
@@ -374,7 +382,7 @@ export default function TeacherAttendanceScreen() {
             year: "numeric",
           })}
         </Text>
-      </View>
+      </LinearGradient>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -526,7 +534,7 @@ export default function TeacherAttendanceScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: BG },
   header: {
-    backgroundColor: NAVY,
+    backgroundColor: PURPLE,
     paddingHorizontal: 18,
     paddingBottom: 17,
     borderBottomLeftRadius: 26,
@@ -542,18 +550,18 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 13,
-    backgroundColor: "#30445E",
+    backgroundColor: "#FFFFFF20",
     alignItems: "center",
     justifyContent: "center",
   },
   headerText: { flex: 1 },
   title: { color: WHITE, fontSize: 24, fontWeight: "900" },
-  subtitle: { color: "#C6D3E0", fontSize: 12, marginTop: 3 },
+  subtitle: { color: "#F0E9FF", fontSize: 12, marginTop: 3 },
   refreshButton: {
     width: 40,
     height: 40,
     borderRadius: 13,
-    backgroundColor: "#30445E",
+    backgroundColor: "#FFFFFF20",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -568,13 +576,13 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   dayCellActive: { backgroundColor: WHITE },
-  dayName: { color: "#AFC0D0", fontSize: 11, fontWeight: "700" },
-  dayNameActive: { color: "#53687F" },
+  dayName: { color: "#E0D3FF", fontSize: 11, fontWeight: "700" },
+  dayNameActive: { color: PURPLE_DARK },
   dayNumber: { color: WHITE, fontSize: 19, fontWeight: "900" },
   dayNumberActive: { color: NAVY },
-  futureDate: { color: "#71869C" },
+  futureDate: { color: "#D0C2F4" },
   monthLabel: {
-    color: "#C6D3E0",
+    color: "#F0E9FF",
     fontSize: 11,
     fontWeight: "700",
     textAlign: "center",
@@ -583,10 +591,15 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 13 },
   summaryCard: {
     backgroundColor: WHITE,
-    borderRadius: 20,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: BORDER,
-    padding: 15,
+    padding: 16,
+    shadowColor: PURPLE_DARK,
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
@@ -594,8 +607,8 @@ const styles = StyleSheet.create({
   summaryIcon: {
     width: 45,
     height: 45,
-    borderRadius: 14,
-    backgroundColor: "#E8F0FF",
+    borderRadius: 15,
+    backgroundColor: LAVENDER,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -615,13 +628,13 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginTop: 5,
   },
-  sectionTitle: { color: NAVY, fontSize: 18, fontWeight: "900" },
+  sectionTitle: { color: NAVY, fontSize: 19, fontWeight: "900", letterSpacing: -0.2 },
   sectionSubtitle: { color: MUTED, fontSize: 12, marginTop: 4 },
   countBadge: {
-    minWidth: 32,
-    height: 32,
-    borderRadius: 11,
-    backgroundColor: "#E8F0FF",
+    minWidth: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: LAVENDER,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 8,
@@ -629,10 +642,15 @@ const styles = StyleSheet.create({
   countBadgeText: { color: BLUE, fontWeight: "900" },
   periodCard: {
     backgroundColor: WHITE,
-    borderRadius: 19,
+    borderRadius: 21,
     borderWidth: 1,
     borderColor: BORDER,
-    padding: 13,
+    padding: 14,
+    shadowColor: PURPLE_DARK,
+    shadowOpacity: 0.045,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
@@ -642,7 +660,7 @@ const styles = StyleSheet.create({
     color: BLUE,
     fontSize: 11,
     fontWeight: "900",
-    backgroundColor: "#E8F0FF",
+    backgroundColor: LAVENDER,
     paddingHorizontal: 6,
     paddingVertical: 5,
     borderRadius: 8,
@@ -652,13 +670,13 @@ const styles = StyleSheet.create({
     width: 2,
     flex: 1,
     minHeight: 15,
-    backgroundColor: "#DCE7F6",
+    backgroundColor: "#DCD0FA",
     marginTop: 7,
     borderRadius: 1,
   },
   periodBody: { flex: 1, minWidth: 0 },
   subjectName: { color: NAVY, fontSize: 15, fontWeight: "900" },
-  className: { color: "#536B82", fontSize: 12, marginTop: 4 },
+  className: { color: "#675B80", fontSize: 12, marginTop: 4 },
   timeRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 6 },
   timeText: { color: MUTED, fontSize: 11, fontWeight: "700" },
   savedRow: {
@@ -680,13 +698,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 5,
-    backgroundColor: NAVY,
-    borderRadius: 12,
-    paddingHorizontal: 11,
+    backgroundColor: PURPLE,
+    borderRadius: 13,
+    paddingHorizontal: 12,
     paddingVertical: 11,
   },
   markButtonText: { color: WHITE, fontSize: 12, fontWeight: "900" },
-  editButton: { backgroundColor: "#E8F0FF" },
+  editButton: { backgroundColor: LAVENDER },
   editButtonText: { color: BLUE },
   stateCard: {
     backgroundColor: WHITE,
@@ -704,7 +722,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 16,
-    backgroundColor: "#E8F0FF",
+    backgroundColor: LAVENDER,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -721,7 +739,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   retryButton: {
-    backgroundColor: NAVY,
+    backgroundColor: PURPLE,
     paddingHorizontal: 18,
     paddingVertical: 11,
     borderRadius: 12,

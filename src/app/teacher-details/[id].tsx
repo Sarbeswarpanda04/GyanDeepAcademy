@@ -19,10 +19,13 @@ import { LinearGradient } from "expo-linear-gradient";
 import { supabase } from "../../lib/supabase";
 import AppAlert, { AppAlertType } from "../../components/AppAlert";
 
-const NAVY = "#202F42";
-const BG = "#F1F5F8";
-const MUTED = "#58718A";
-const BORDER = "#E1E8EF";
+const NAVY = "#1F2937";
+const PURPLE = "#611CD0";
+const PURPLE_DARK = "#44109D";
+const PURPLE_BRIGHT = "#4C02F7";
+const BG = "#F3F3FF";
+const MUTED = "#718096";
+const BORDER = "#E8E3F5";
 const WHITE = "#FFFFFF";
 
 type SalaryType = "monthly" | "daily" | "batch";
@@ -149,6 +152,8 @@ export default function TeacherDetailsScreen() {
 
   const [staff, setStaff] = useState<Staff | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoFailed, setPhotoFailed] = useState(false);
+  const [deletingTeacher, setDeletingTeacher] = useState(false);
   const [attendance, setAttendance] = useState<Record<string, AttendanceRow>>(
     {},
   );
@@ -287,19 +292,26 @@ export default function TeacherDetailsScreen() {
         (assignmentsResult.data ?? []) as SubjectAssignment[],
       );
 
+      // Accept a full image URL or a storage object path.
+      setPhotoFailed(false);
       if (person.photo_path) {
-        const { data: signed, error: photoError } = await supabase.storage
-          .from("staff-photos")
-          .createSignedUrl(person.photo_path, 3600);
-
-        if (photoError) {
-          console.warn(
-            "Teacher photo could not be loaded:",
-            photoError.message,
-          );
+        const storedPhoto = String(person.photo_path).trim();
+        if (/^https?:\/\//i.test(storedPhoto)) {
+          setPhotoUrl(storedPhoto);
+        } else {
+          const objectPath = storedPhoto
+            .replace(/^staff-photos\//, "")
+            .replace(/^\/+/, "");
+          const { data: signed, error: photoError } = await supabase.storage
+            .from("staff-photos")
+            .createSignedUrl(objectPath, 3600);
+          if (photoError) {
+            console.warn("Teacher photo could not be loaded:", photoError.message);
+            setPhotoUrl(null);
+          } else {
+            setPhotoUrl(signed?.signedUrl ?? null);
+          }
         }
-
-        setPhotoUrl(signed?.signedUrl ?? null);
       } else {
         setPhotoUrl(null);
       }
@@ -657,15 +669,24 @@ export default function TeacherDetailsScreen() {
   };
 
   const deleteTeacher = async () => {
-    if (!staff) return;
-
+    if (!staff || deletingTeacher) return;
+    setDeletingTeacher(true);
     try {
-      const relatedTables = ["staff_attendance", "staff_payouts"] as const;
-      for (const table of relatedTables) {
+      // Delete dependent subject assignments before institute_staff to satisfy
+      // institute_subject_teachers_teacher_id_fkey.
+      const { error: assignmentsError } = await supabase
+        .from("institute_subject_teachers")
+        .delete()
+        .eq("teacher_id", staff.id)
+        .eq("institute_id", staff.institute_id);
+      if (assignmentsError) throw assignmentsError;
+
+      for (const table of ["staff_attendance", "staff_payouts"] as const) {
         const { error } = await supabase
           .from(table)
           .delete()
-          .eq("staff_id", staff.id);
+          .eq("staff_id", staff.id)
+          .eq("institute_id", staff.institute_id);
         if (error) throw error;
       }
 
@@ -675,35 +696,72 @@ export default function TeacherDetailsScreen() {
         .eq("id", staff.id)
         .eq("institute_id", staff.institute_id)
         .select("id");
-
       if (error) throw error;
       if (!data || data.length === 0) {
         throw new Error("Teacher was not deleted. Check your permissions.");
       }
-
       setDeleteSheet(false);
-      showAlert(
-        "Teacher deleted",
-        "The teacher has been removed.",
-        "success",
-        () => router.replace("/teacher" as never),
-      );
+      showAlert("Teacher deleted", "The teacher and their subject assignments have been removed.", "success",
+        () => router.replace("/teacher" as never));
     } catch (error: any) {
       setDeleteSheet(false);
-      showAlert(
-        "Could not delete teacher",
-        error?.message ?? "Please try again.",
-        "error",
-      );
+      showAlert("Could not delete teacher", error?.message ?? "Please try again.", "error");
+    } finally {
+      setDeletingTeacher(false);
     }
   };
 
-  if (loading || !staff) {
+  if (loading) {
     return (
-      <View style={styles.loading}>
-        <StatusBar barStyle="light-content" backgroundColor={NAVY} />
-        <ActivityIndicator size="large" color={NAVY} />
-        <Text style={styles.muted}>Loading teacher details…</Text>
+      <View style={styles.screen}>
+        <StatusBar barStyle="light-content" backgroundColor={PURPLE_DARK} />
+        <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
+          <LinearGradient colors={[PURPLE, PURPLE_DARK, PURPLE_BRIGHT]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
+            <View style={styles.toolbar}>
+              <View style={[styles.skeleton, styles.skeletonIcon]} />
+              <View style={styles.toolbarRight}>
+                <View style={[styles.skeleton, styles.skeletonIcon]} />
+                <View style={[styles.skeleton, styles.skeletonIcon]} />
+                <View style={[styles.skeleton, styles.skeletonIcon]} />
+              </View>
+            </View>
+            <View style={styles.personRow}>
+              <View style={[styles.skeleton, styles.skeletonAvatar]} />
+              <View style={{ flex: 1, gap: 10 }}>
+                <View style={[styles.skeleton, styles.skeletonName]} />
+                <View style={[styles.skeleton, styles.skeletonLine]} />
+                <View style={[styles.skeleton, styles.skeletonLineShort]} />
+              </View>
+            </View>
+            <View style={styles.contactRow}>
+              <View style={[styles.skeleton, styles.skeletonButton]} />
+              <View style={[styles.skeleton, styles.skeletonButton]} />
+            </View>
+          </LinearGradient>
+          {[0, 1, 2, 3].map((item) => (
+            <View key={item} style={styles.card}>
+              <View style={[styles.skeleton, styles.skeletonSection]} />
+              <View style={[styles.skeleton, styles.skeletonWideLine]} />
+              <View style={[styles.skeleton, styles.skeletonWideLine]} />
+              <View style={[styles.skeleton, styles.skeletonMediumLine]} />
+            </View>
+          ))}
+        </ScrollView>
+        <AppAlert {...alert} onCancel={closeAlert} />
+      </View>
+    );
+  }
+
+  if (!staff) {
+    return (
+      <View style={[styles.screen, styles.loading]}>
+        <StatusBar barStyle="light-content" backgroundColor={PURPLE_DARK} />
+        <Feather name="alert-circle" size={38} color={PURPLE} />
+        <Text style={styles.emptyTitle}>Teacher details unavailable</Text>
+        <Text style={styles.muted}>Go back and try opening this teacher again.</Text>
+        <Pressable style={styles.primaryButton} onPress={() => router.back()}>
+          <Text style={styles.primaryButtonText}>Go back</Text>
+        </Pressable>
         <AppAlert {...alert} onCancel={closeAlert} />
       </View>
     );
@@ -722,13 +780,13 @@ export default function TeacherDetailsScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={NAVY} />
+      <StatusBar barStyle="light-content" backgroundColor={PURPLE_DARK} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.page}
       >
-        <LinearGradient colors={[NAVY, "#192638"]} style={styles.hero}>
+        <LinearGradient colors={[PURPLE, PURPLE_DARK, PURPLE_BRIGHT]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
           <View style={styles.toolbar}>
             <Pressable style={styles.iconButton} onPress={() => router.back()}>
               <Feather name="arrow-left" size={28} color={WHITE} />
@@ -940,7 +998,7 @@ export default function TeacherDetailsScreen() {
             <Switch
               value={autoCalculate}
               onValueChange={setAutoCalculate}
-              trackColor={{ false: "#D6DFE7", true: NAVY }}
+              trackColor={{ false: "#D6DFE7", true: PURPLE }}
               thumbColor={WHITE}
             />
           </View>
@@ -1542,10 +1600,18 @@ export default function TeacherDetailsScreen() {
             </Text>
 
             <Pressable
-              style={styles.deleteButton}
+              disabled={deletingTeacher}
+              style={[styles.deleteButton, deletingTeacher && { opacity: 0.65 }]}
               onPress={() => void deleteTeacher()}
             >
-              <Text style={styles.deleteButtonText}>Delete Teacher</Text>
+              {deletingTeacher ? (
+                <View style={styles.deleteButtonInner}>
+                  <ActivityIndicator color={WHITE} />
+                  <Text style={styles.deleteButtonText}>Deleting…</Text>
+                </View>
+              ) : (
+                <Text style={styles.deleteButtonText}>Delete Teacher</Text>
+              )}
             </Pressable>
 
             <Pressable
@@ -1573,6 +1639,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 12,
   },
+  emptyTitle: { fontSize: 20, fontWeight: "800", color: NAVY, marginTop: 10 },
+  skeleton: { backgroundColor: "rgba(255,255,255,0.24)", overflow: "hidden" },
+  skeletonIcon: { width: 36, height: 36, borderRadius: 12 },
+  skeletonAvatar: { width: 106, height: 106, borderRadius: 30, backgroundColor: "rgba(255,255,255,0.22)" },
+  skeletonName: { width: "88%", height: 25, borderRadius: 8 },
+  skeletonLine: { width: "75%", height: 13, borderRadius: 6 },
+  skeletonLineShort: { width: "52%", height: 13, borderRadius: 6 },
+  skeletonButton: { flex: 1, height: 50, borderRadius: 17, backgroundColor: "rgba(255,255,255,0.22)" },
+  skeletonSection: { width: "58%", height: 20, borderRadius: 7, marginBottom: 18, backgroundColor: "#E7E1F7" },
+  skeletonWideLine: { width: "100%", height: 14, borderRadius: 7, marginBottom: 13, backgroundColor: "#F0ECFA" },
+  skeletonMediumLine: { width: "64%", height: 14, borderRadius: 7, backgroundColor: "#F0ECFA" },
+  deleteButtonInner: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
   hero: {
     paddingHorizontal: 25,
     paddingTop: 35,
@@ -1613,7 +1691,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 50,
     borderRadius: 19,
-    backgroundColor: "#00ff6e",
+    backgroundColor: "#DCFCE7",
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -1624,7 +1702,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 50,
     borderRadius: 19,
-    backgroundColor: "#0077ff",
+    backgroundColor: "#4C02F7",
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -1702,7 +1780,7 @@ const styles = StyleSheet.create({
     width: 35,
     height: 35,
     borderRadius: 11,
-    backgroundColor: NAVY,
+    backgroundColor: PURPLE,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1869,7 +1947,7 @@ const styles = StyleSheet.create({
   primaryButton: {
     minHeight: 58,
     borderRadius: 17,
-    backgroundColor: NAVY,
+    backgroundColor: PURPLE,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 18,

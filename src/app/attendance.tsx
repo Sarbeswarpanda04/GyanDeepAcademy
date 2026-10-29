@@ -1,6 +1,5 @@
 import React, { useCallback, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
   Modal,
   Pressable,
   ScrollView,
@@ -15,12 +14,16 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
 import AppAlert, { type AppAlertType } from "../components/AppAlert";
 import FloatingTabBar from "../components/FloatingTabBar";
+import { LinearGradient } from "expo-linear-gradient";
 
-const NAVY = "#202F42";
-const BG = "#F1F5F8";
+const NAVY = "#1F2937";
+const PURPLE = "#4C02F7";
+const PURPLE_DARK = "#44109D";
+const BG = "#F3F3FF";
 const WHITE = "#FFFFFF";
-const MUTED = "#9DB1BE";
-const BORDER = "#E1E8EF";
+const MUTED = "#718096";
+const BORDER = "#E8E3F5";
+const LAVENDER = "#C4B5FD";
 const GREEN = "#43814A";
 const DAYS = [
   "Sunday",
@@ -334,7 +337,10 @@ export default function AttendanceScreen() {
   return (
     <View style={styles.screen}>
       <StatusBar barStyle="light-content" backgroundColor={NAVY} />
-      <View
+      <LinearGradient
+        colors={["#611CD0", "#44109D", "#4C02F7"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={[styles.topPanel, { paddingTop: Math.max(insets.top, 10) + 8 }]}
       >
         <View style={styles.topHeading}>
@@ -384,7 +390,7 @@ export default function AttendanceScreen() {
             );
           })}
         </View>
-      </View>
+      </LinearGradient>
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -415,9 +421,18 @@ export default function AttendanceScreen() {
         </Text>
 
         {loading ? (
-          <View style={styles.loading}>
-            <ActivityIndicator size="large" color={NAVY} />
-            <Text style={styles.loadingText}>Loading timetable…</Text>
+          <View style={styles.skeletonList}>
+            {[0, 1, 2].map((item) => (
+              <View key={item} style={styles.classCard}>
+                <View style={styles.skeletonBadge} />
+                <View style={styles.skeletonInfo}>
+                  <View style={styles.skeletonTitle} />
+                  <View style={styles.skeletonLine} />
+                  <View style={styles.skeletonLineShort} />
+                  <View style={styles.skeletonLineTiny} />
+                </View>
+              </View>
+            ))}
           </View>
         ) : scheduled.length === 0 ? (
           <View style={styles.emptyCard}>
@@ -611,7 +626,7 @@ export default function AttendanceScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: BG },
-  topPanel: { backgroundColor: NAVY, paddingHorizontal: 20, paddingBottom: 20 },
+  topPanel: { paddingHorizontal: 20, paddingBottom: 20 },
   topHeading: {
     flexDirection: "row",
     alignItems: "center",
@@ -624,7 +639,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: "#30445E",
+    backgroundColor: "rgba(255,255,255,0.18)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -638,12 +653,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
   },
-  dayCellActive: { backgroundColor: WHITE },
-  dayShort: { color: MUTED, fontSize: 12, fontWeight: "600" },
-  dayShortActive: { color: "#53687F" },
+  dayCellActive: { backgroundColor: WHITE, borderRadius: 20 },
+  dayShort: { color: "#E5D9FF", fontSize: 12, fontWeight: "600" },
+  dayShortActive: { color: PURPLE_DARK },
   dayNumber: { color: WHITE, fontSize: 20, fontWeight: "800" },
-  dayNumberActive: { color: NAVY },
-  futureDate: { color: "#617891" },
+  dayNumberActive: { color: PURPLE },
+  futureDate: { color: "#D8C8FF" },
   content: {
     paddingHorizontal: 16,
     paddingTop: 18,
@@ -651,7 +666,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   summaryCard: {
-    backgroundColor: NAVY,
+    backgroundColor: WHITE,
     borderRadius: 24,
     padding: 20,
     flexDirection: "row",
@@ -660,12 +675,12 @@ const styles = StyleSheet.create({
     minHeight: 108,
   },
   summaryDate: { color: MUTED, fontSize: 15, fontWeight: "600" },
-  summaryCount: { color: WHITE, fontSize: 22, fontWeight: "800", marginTop: 8 },
+  summaryCount: { color: NAVY, fontSize: 22, fontWeight: "800", marginTop: 8 },
   summaryRight: { alignItems: "flex-end" },
-  summaryPercent: { color: "#62B968", fontSize: 29, fontWeight: "900" },
+  summaryPercent: { color: PURPLE, fontSize: 29, fontWeight: "900" },
   summaryPresent: { color: MUTED, fontSize: 13, fontWeight: "600" },
   sectionTitle: {
-    color: "#526B82",
+    color: NAVY,
     fontSize: 17,
     fontWeight: "800",
     marginTop: 10,
@@ -690,18 +705,18 @@ const styles = StyleSheet.create({
     width: 58,
     height: 58,
     borderRadius: 18,
-    backgroundColor: "#FFF4C9",
+    backgroundColor: "#EEE8FF",
     alignItems: "center",
     justifyContent: "center",
   },
-  subjectInitial: { color: "#947300", fontSize: 23, fontWeight: "900" },
+  subjectInitial: { color: PURPLE_DARK, fontSize: 23, fontWeight: "900" },
   classInfo: { flex: 1, minWidth: 0 },
   classTitle: { color: NAVY, fontSize: 18, fontWeight: "800" },
-  classMeta: { color: "#536B82", fontSize: 13, marginTop: 3 },
+  classMeta: { color: "#4B5563", fontSize: 13, marginTop: 3 },
   classTime: { color: MUTED, fontSize: 13, marginTop: 3 },
-  teacherName: { color: "#8395A7", fontSize: 12, marginTop: 3 },
+  teacherName: { color: MUTED, fontSize: 12, marginTop: 3 },
   markButton: {
-    backgroundColor: NAVY,
+    backgroundColor: PURPLE,
     borderRadius: 24,
     paddingHorizontal: 15,
     paddingVertical: 13,
@@ -747,13 +762,38 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 8,
   },
-  loading: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 32,
-    gap: 10,
+  skeletonList: { gap: 11 },
+  skeletonBadge: {
+    width: 58,
+    height: 58,
+    borderRadius: 18,
+    backgroundColor: "#EEE8FF",
   },
-  loadingText: { color: MUTED, fontSize: 14 },
+  skeletonInfo: { flex: 1, gap: 8 },
+  skeletonTitle: {
+    width: "68%",
+    height: 15,
+    borderRadius: 8,
+    backgroundColor: "#E5DDF8",
+  },
+  skeletonLine: {
+    width: "90%",
+    height: 10,
+    borderRadius: 6,
+    backgroundColor: "#EEEAF7",
+  },
+  skeletonLineShort: {
+    width: "58%",
+    height: 10,
+    borderRadius: 6,
+    backgroundColor: "#EEEAF7",
+  },
+  skeletonLineTiny: {
+    width: "38%",
+    height: 9,
+    borderRadius: 6,
+    backgroundColor: "#F1EDF9",
+  },
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(10,20,35,0.42)",
@@ -816,14 +856,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 14,
   },
-  calendarDayActive: { backgroundColor: NAVY },
+  calendarDayActive: { backgroundColor: PURPLE },
   calendarDayText: { color: NAVY, fontSize: 16, fontWeight: "700" },
   calendarDayTextActive: { color: WHITE },
   selectDateButton: {
     marginTop: 18,
     height: 54,
     borderRadius: 16,
-    backgroundColor: NAVY,
+    backgroundColor: PURPLE,
     alignItems: "center",
     justifyContent: "center",
   },

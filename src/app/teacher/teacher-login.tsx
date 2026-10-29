@@ -1,9 +1,12 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
+  Image,
+  ImageSourcePropType,
   StatusBar,
   StyleSheet,
   Text,
@@ -11,15 +14,22 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
+import Constants, { ExecutionEnvironment } from "expo-constants";
 import AppAlert, { type AppAlertType } from "../../components/AppAlert";
 
-const NAVY = "#202F42";
-const BG = "#F1F5F8";
+const NAVY = "#241344";
+const PURPLE = "#611CD0";
+const PURPLE_DARK = "#44109D";
+const PURPLE_BRIGHT = "#4C02F7";
+const BG = "#F3F3FF";
 const WHITE = "#FFFFFF";
-const MUTED = "#718393";
+const MUTED = "#718096";
+const BORDER = "#E8E3F5";
+const APP_LOGO: ImageSourcePropType = require("../../../assets/images/icon.png");
 
 type AlertState = {
   visible: boolean;
@@ -33,6 +43,7 @@ export default function TeacherLoginScreen() {
 
   const [phone, setPhone] = useState("");
   const [pin, setPin] = useState("");
+  const pinInputRef = useRef<TextInput>(null);
   const [showPin, setShowPin] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -135,6 +146,26 @@ export default function TeacherLoginScreen() {
         throw sessionError;
       }
 
+      // Expo Go on Android does not include the native remote-notification module.
+      // Load pushNotifications only in a native development/production build so its
+      // expo-notifications import cannot crash this login route in Expo Go.
+      if (Constants.executionEnvironment !== ExecutionEnvironment.StoreClient) {
+        void import("../../lib/pushNotifications")
+          .then(({ registerTeacherPushNotifications }) =>
+            registerTeacherPushNotifications(),
+          )
+          .catch((notificationError) => {
+            console.warn(
+              "[teacher-login] Push notification registration skipped:",
+              notificationError,
+            );
+          });
+      } else {
+        console.info(
+          "[teacher-login] Remote push notifications require a development build; skipping in Expo Go.",
+        );
+      }
+
       // Open the dashboard only after Supabase accepts the session.
       router.replace("/teacher/teacher-dashboard" as never);
     } catch (error: unknown) {
@@ -154,121 +185,205 @@ export default function TeacherLoginScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="dark-content" backgroundColor={BG} />
+      <StatusBar barStyle="light-content" backgroundColor={PURPLE_DARK} />
+      <LinearGradient
+        colors={[PURPLE, PURPLE_DARK, PURPLE_BRIGHT]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <View pointerEvents="none" style={styles.orbTop} />
+      <View pointerEvents="none" style={styles.orbBottom} />
 
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
       >
-        <View
-          style={[styles.topBar, { paddingTop: Math.max(insets.top, 14) + 8 }]}
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              paddingTop: Math.max(insets.top, 12) + 8,
+              paddingBottom: Math.max(insets.bottom, 14) + 12,
+            },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          bounces={false}
         >
-          <Pressable
-            onPress={() => router.back()}
-            style={styles.backButton}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <Feather name="chevron-left" size={28} color={NAVY} />
-          </Pressable>
-
-          <Text style={styles.topTitle}>Teacher Login</Text>
-        </View>
-
-        <View style={styles.content}>
-          <View style={styles.logoCircle}>
-            <Feather name="book-open" size={34} color={WHITE} />
+          <View style={styles.topBar}>
+            <Pressable
+              onPress={() => router.back()}
+              style={styles.backButton}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              hitSlop={8}
+            >
+              <Feather name="chevron-left" size={26} color={WHITE} />
+            </Pressable>
+            <Text style={styles.topTitle}>Teacher Login</Text>
+            <View style={styles.topBarSpacer} />
           </View>
 
-          <Text style={styles.heading}>Welcome back</Text>
+          <View style={styles.content}>
+            <View style={styles.brandBlock}>
+              <View style={styles.logoGlow}>
+                <LinearGradient
+                  colors={["#FFFFFF", "#F0E7FF"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.logoSurface}
+                >
+                  <Image
+                    source={APP_LOGO}
+                    style={styles.logoImage}
+                    resizeMode="contain"
+                    accessibilityLabel="GyanDeep Academy logo"
+                  />
+                </LinearGradient>
+              </View>
+              <Text style={styles.brandName}>GyanDeep Academy</Text>
+              <Text style={styles.brandTagline}>LEARN TODAY. LEAD TOMORROW.</Text>
+              <View style={styles.brandAccent} />
+              <Text style={styles.heading}>Welcome back</Text>
+              <Text style={styles.subtitle}>
+                Sign in with the mobile number and 4-digit PIN provided by your institute.
+              </Text>
+            </View>
 
-          <Text style={styles.subtitle}>
-            Sign in with the mobile number and 4-digit PIN provided by your
-            institute owner.
-          </Text>
-
-          <View style={styles.formCard}>
-            <Text style={styles.label}>Registered mobile number</Text>
-
-            <View style={styles.inputWrap}>
-              <View style={styles.countryCode}>
+            <View style={styles.formCard}>
+              <Text style={styles.label}>Registered mobile number</Text>
+              <View style={styles.phoneInputWrap}>
                 <Text style={styles.countryText}>+91</Text>
+                <View style={styles.inputDivider} />
+                <TextInput
+                  style={styles.phoneInput}
+                  value={phone}
+                  onChangeText={(value) =>
+                    setPhone(value.replace(/\D/g, "").slice(0, 10))
+                  }
+                  placeholder="Enter mobile number"
+                  placeholderTextColor="#9A93AA"
+                  keyboardType="phone-pad"
+                  maxLength={10}
+                  autoComplete="tel"
+                  textContentType="telephoneNumber"
+                  editable={!loading}
+                  returnKeyType="next"
+                  selectionColor={PURPLE}
+                />
+                {phone.length === 10 ? (
+                  <Feather name="check-circle" size={18} color="#16A34A" />
+                ) : null}
               </View>
 
-              <TextInput
-                style={styles.phoneInput}
-                value={phone}
-                onChangeText={(value) =>
-                  setPhone(value.replace(/\D/g, "").slice(0, 10))
-                }
-                placeholder="10-digit mobile number"
-                placeholderTextColor="#9CA6B4"
-                keyboardType="phone-pad"
-                maxLength={10}
-                autoComplete="tel"
-                textContentType="telephoneNumber"
-                editable={!loading}
-                returnKeyType="next"
-              />
-            </View>
+              <View style={styles.pinLabelRow}>
+                <Text style={styles.label}>4-digit login PIN</Text>
+                <Text style={styles.pinHint}>4 DIGITS</Text>
+              </View>
 
-            <Text style={styles.label}>4-digit login PIN</Text>
+              <View style={styles.pinSection}>
+                <Pressable
+                  style={styles.pinBoxes}
+                  onPress={() => pinInputRef.current?.focus()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Enter four-digit PIN"
+                  disabled={loading}
+                >
+                  {[0, 1, 2, 3].map((index) => {
+                    const digit = pin[index];
+                    const active = pin.length === index;
+                    return (
+                      <View
+                        key={index}
+                        style={[
+                          styles.pinBox,
+                          active && styles.pinBoxActive,
+                          digit !== undefined && styles.pinBoxFilled,
+                        ]}
+                      >
+                        <Text style={styles.pinDigit}>
+                          {digit === undefined ? "" : showPin ? digit : "•"}
+                        </Text>
+                        {active && digit === undefined ? (
+                          <View style={styles.pinCursor} />
+                        ) : null}
+                      </View>
+                    );
+                  })}
+                  <TextInput
+                    ref={pinInputRef}
+                    value={pin}
+                    onChangeText={(value) =>
+                      setPin(value.replace(/\D/g, "").slice(0, 4))
+                    }
+                    keyboardType="number-pad"
+                    maxLength={4}
+                    editable={!loading}
+                    returnKeyType="go"
+                    onSubmitEditing={login}
+                    autoComplete="off"
+                    textContentType="oneTimeCode"
+                    caretHidden
+                    style={styles.pinHiddenInput}
+                    selectionColor="transparent"
+                    accessibilityLabel="Four-digit login PIN"
+                  />
+                </Pressable>
 
-            <View style={styles.inputWrap}>
-              <Feather name="lock" size={19} color={MUTED} />
-
-              <TextInput
-                style={styles.pinInput}
-                value={pin}
-                onChangeText={(value) =>
-                  setPin(value.replace(/\D/g, "").slice(0, 4))
-                }
-                placeholder="Enter your PIN"
-                placeholderTextColor="#9CA6B4"
-                keyboardType="number-pad"
-                secureTextEntry={!showPin}
-                maxLength={4}
-                editable={!loading}
-                returnKeyType="go"
-                onSubmitEditing={login}
-              />
+                <Pressable
+                  onPress={() => setShowPin((current) => !current)}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel={showPin ? "Hide PIN" : "Show PIN"}
+                  style={styles.showPinButton}
+                >
+                  <Feather
+                    name={showPin ? "eye-off" : "eye"}
+                    size={18}
+                    color={PURPLE}
+                  />
+                  <Text style={styles.showPinText}>
+                    {showPin ? "Hide PIN" : "Show PIN"}
+                  </Text>
+                </Pressable>
+              </View>
 
               <Pressable
-                onPress={() => setShowPin((current) => !current)}
-                hitSlop={10}
+                style={[styles.loginButton, loading && styles.disabled]}
+                onPress={login}
+                disabled={loading}
                 accessibilityRole="button"
-                accessibilityLabel={showPin ? "Hide PIN" : "Show PIN"}
               >
-                <Feather
-                  name={showPin ? "eye-off" : "eye"}
-                  size={20}
-                  color={NAVY}
-                />
+                <LinearGradient
+                  colors={[PURPLE, PURPLE_DARK, PURPLE_BRIGHT]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.loginGradient}
+                >
+                  {loading ? (
+                    <ActivityIndicator color={WHITE} />
+                  ) : (
+                    <>
+                      <Text style={styles.loginText}>Sign in</Text>
+                      <Feather name="arrow-right" size={19} color={WHITE} />
+                    </>
+                  )}
+                </LinearGradient>
               </Pressable>
+
+              <View style={styles.secureNote}>
+                <Feather name="check-circle" size={14} color={PURPLE} />
+                <Text style={styles.secureText}>Secure teacher access</Text>
+              </View>
+              <Text style={styles.helpText}>
+                Forgot your PIN? Contact your institute owner to reset it.
+              </Text>
             </View>
-
-            <Pressable
-              style={[styles.loginButton, loading && styles.disabled]}
-              onPress={login}
-              disabled={loading}
-              accessibilityRole="button"
-            >
-              {loading ? (
-                <ActivityIndicator color={WHITE} />
-              ) : (
-                <>
-                  <Text style={styles.loginText}>Login</Text>
-                  <Feather name="arrow-right" size={20} color={WHITE} />
-                </>
-              )}
-            </Pressable>
-
-            <Text style={styles.helpText}>
-              Forgot your PIN? Contact your institute owner or manager to reset
-              it.
-            </Text>
           </View>
-        </View>
+          <Text style={styles.footerText}>YOUR JOURNEY. YOUR POTENTIAL.</Text>
+        </ScrollView>
       </KeyboardAvoidingView>
 
       <AppAlert
@@ -289,131 +404,134 @@ export default function TeacherLoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
+  flex: { flex: 1 },
+  screen: { flex: 1, backgroundColor: PURPLE_DARK },
+  orbTop: {
+    position: "absolute", width: 250, height: 250, borderRadius: 125,
+    top: -125, right: -95, backgroundColor: "rgba(255,255,255,0.08)",
   },
-  screen: {
-    flex: 1,
-    backgroundColor: BG,
+  orbBottom: {
+    position: "absolute", width: 200, height: 200, borderRadius: 100,
+    bottom: -90, left: -95, backgroundColor: "rgba(255,255,255,0.07)",
+  },
+  scrollContent: {
+    flexGrow: 1, justifyContent: "center", paddingHorizontal: 22,
   },
   topBar: {
-    backgroundColor: BG,
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
+    width: "100%", maxWidth: 460, alignSelf: "center",
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    marginBottom: 8,
   },
-  backButton: {
-    width: 38,
-    height: 40,
-    justifyContent: "center",
+  backButton: { width: 40, height: 42, justifyContent: "center" },
+  topTitle: { color: WHITE, fontSize: 16, fontWeight: "800", letterSpacing: 0.2 },
+  topBarSpacer: { width: 40 },
+  content: { width: "100%", maxWidth: 460, alignSelf: "center", paddingBottom: 10 },
+  brandBlock: { alignItems: "center", marginBottom: 20 },
+  logoGlow: {
+    width: 104, height: 104, borderRadius: 32, padding: 4, marginBottom: 12,
+    backgroundColor: "rgba(255,255,255,0.22)",
+    shadowColor: "#180044", shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.35, shadowRadius: 18, elevation: 12,
   },
-  topTitle: {
-    color: NAVY,
-    fontSize: 23,
-    fontWeight: "900",
+  logoSurface: {
+    flex: 1, borderRadius: 28, padding: 10, alignItems: "center",
+    justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.85)",
   },
-  content: {
-    flex: 1,
-    justifyContent: "center",
-    paddingHorizontal: 22,
-    paddingBottom: 32,
+  logoImage: { width: "100%", height: "100%" },
+  brandName: {
+    color: WHITE, fontSize: 25, fontWeight: "900", letterSpacing: -0.8,
+    textAlign: "center", textShadowColor: "rgba(20,0,60,0.3)",
+    textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 6,
   },
-  logoCircle: {
-    width: 76,
-    height: 76,
-    borderRadius: 26,
-    backgroundColor: NAVY,
-    alignItems: "center",
-    justifyContent: "center",
-    alignSelf: "center",
-    marginBottom: 22,
+  brandTagline: {
+    color: "#E7DAFF", fontSize: 8, fontWeight: "800", letterSpacing: 2,
+    textAlign: "center", marginTop: 6,
   },
-  heading: {
-    fontSize: 30,
-    fontWeight: "900",
-    color: NAVY,
-    textAlign: "center",
+  brandAccent: {
+    width: 38, height: 3, borderRadius: 3, backgroundColor: "#D9C4FF",
+    marginTop: 12, marginBottom: 12,
   },
+  heading: { fontSize: 25, fontWeight: "900", color: WHITE, textAlign: "center" },
   subtitle: {
-    color: MUTED,
-    fontSize: 15,
-    lineHeight: 22,
-    textAlign: "center",
-    marginTop: 10,
-    marginBottom: 26,
-    paddingHorizontal: 8,
+    color: "#E4D8FA", fontSize: 12, lineHeight: 18, textAlign: "center",
+    marginTop: 6, paddingHorizontal: 8, maxWidth: 330,
   },
   formCard: {
-    backgroundColor: WHITE,
-    borderRadius: 26,
-    padding: 22,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: "#E6ECF1",
+    backgroundColor: WHITE, borderRadius: 24, padding: 20,
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.8)",
+    shadowColor: "#190047", shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18, shadowRadius: 20, elevation: 8,
   },
-  label: {
-    color: NAVY,
-    fontSize: 14,
-    fontWeight: "800",
-    marginTop: 4,
+  label: { color: NAVY, fontSize: 12, fontWeight: "800" },
+  phoneInputWrap: {
+    minHeight: 54, borderRadius: 14, borderWidth: 1.3, borderColor: BORDER,
+    backgroundColor: "#FBFAFF", paddingHorizontal: 13, flexDirection: "row",
+    alignItems: "center", gap: 10, marginTop: 9,
   },
-  inputWrap: {
-    minHeight: 58,
-    borderRadius: 15,
-    borderWidth: 1.5,
-    borderColor: "#DADFE5",
-    backgroundColor: WHITE,
-    paddingHorizontal: 15,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 11,
-  },
-  countryCode: {
-    borderRightWidth: 1,
-    borderRightColor: "#E1E8EF",
-    paddingRight: 11,
-  },
-  countryText: {
-    color: NAVY,
-    fontSize: 16,
-    fontWeight: "900",
-  },
+  countryText: { color: PURPLE, fontSize: 14, fontWeight: "900" },
+  inputDivider: { height: 24, width: 1, backgroundColor: BORDER },
   phoneInput: {
-    flex: 1,
-    color: NAVY,
-    fontSize: 16,
+    flex: 1, minWidth: 0, color: NAVY, fontSize: 15, paddingVertical: 12,
   },
-  pinInput: {
-    flex: 1,
-    color: NAVY,
-    fontSize: 18,
-    letterSpacing: 5,
+  pinLabelRow: {
+    marginTop: 19, flexDirection: "row", alignItems: "center",
+    justifyContent: "space-between",
   },
+  pinHint: { color: "#9B8AB8", fontSize: 9, fontWeight: "900", letterSpacing: 1.2 },
+  pinSection: { marginTop: 12 },
+  pinBoxes: {
+    flexDirection: "row", justifyContent: "space-between", gap: 10,
+    position: "relative",
+  },
+  pinBox: {
+    flex: 1, height: 64, borderRadius: 15, borderWidth: 1.5,
+    borderColor: "#E4DDF1", backgroundColor: "#FBFAFF",
+    alignItems: "center", justifyContent: "center",
+  },
+  pinBoxActive: {
+    borderColor: PURPLE, backgroundColor: "#F7F1FF",
+    shadowColor: PURPLE, shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12, shadowRadius: 6, elevation: 2,
+  },
+  pinBoxFilled: { borderColor: "#C8B4F1", backgroundColor: "#F7F1FF" },
+  pinDigit: {
+    color: PURPLE_DARK, fontSize: 29, lineHeight: 36,
+    fontWeight: "900", textAlign: "center",
+  },
+  pinCursor: {
+    position: "absolute", height: 23, width: 2, borderRadius: 2,
+    backgroundColor: PURPLE,
+  },
+  pinHiddenInput: {
+    ...StyleSheet.absoluteFill, opacity: 0.02, color: "transparent",
+    backgroundColor: "transparent",
+  },
+  showPinButton: {
+    alignSelf: "center", flexDirection: "row", alignItems: "center",
+    justifyContent: "center", gap: 6, paddingVertical: 11,
+  },
+  showPinText: { color: PURPLE, fontSize: 11, fontWeight: "800" },
   loginButton: {
-    height: 58,
-    borderRadius: 16,
-    backgroundColor: NAVY,
-    marginTop: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
+    height: 53, borderRadius: 15, overflow: "hidden", marginTop: 9,
+    shadowColor: PURPLE, shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.2, shadowRadius: 9, elevation: 4,
   },
-  disabled: {
-    opacity: 0.65,
+  loginGradient: {
+    flex: 1, flexDirection: "row", alignItems: "center",
+    justifyContent: "center", gap: 10,
   },
-  loginText: {
-    color: WHITE,
-    fontSize: 18,
-    fontWeight: "900",
+  disabled: { opacity: 0.65 },
+  loginText: { color: WHITE, fontSize: 15, fontWeight: "900", letterSpacing: 0.3 },
+  secureNote: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 6, marginTop: 13,
   },
+  secureText: { color: MUTED, fontSize: 10, fontWeight: "600" },
   helpText: {
-    color: MUTED,
-    fontSize: 12,
-    lineHeight: 18,
-    textAlign: "center",
-    marginTop: 7,
+    color: MUTED, fontSize: 11, lineHeight: 16, textAlign: "center", marginTop: 11,
+  },
+  footerText: {
+    color: "#E8DFFF", fontSize: 9, fontWeight: "800", letterSpacing: 1.6,
+    textAlign: "center", marginTop: 12,
   },
 });

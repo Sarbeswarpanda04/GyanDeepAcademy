@@ -4,12 +4,15 @@ import {
   Alert,
   Linking,
   SafeAreaView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { WebView } from "react-native-webview";
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system/legacy";
@@ -23,6 +26,15 @@ type Book = {
 };
 
 const BUCKET = "institute-books";
+const PURPLE = "#611CD0";
+const PURPLE_DARK = "#44109D";
+const PURPLE_BRIGHT = "#4C02F7";
+const BG = "#F3F3FF";
+const INK = "#241344";
+const MUTED = "#718096";
+const BORDER = "#E8E3F5";
+const LAVENDER = "#EDE7FF";
+const WHITE = "#FFFFFF";
 
 export default function TeacherBookViewer() {
   const router = useRouter();
@@ -94,7 +106,6 @@ export default function TeacherBookViewer() {
 
       const safeName =
         book.name.replace(/[<>:"/\\|?*\u0000-\u001F]/g, "_") || "book";
-
       const destination = `${directory}${safeName}.pdf`;
       const result = await FileSystem.downloadAsync(pdfUrl, destination);
 
@@ -123,81 +134,153 @@ export default function TeacherBookViewer() {
 
   return (
     <SafeAreaView style={styles.screen}>
+      <StatusBar barStyle="dark-content" backgroundColor={BG} />
       <Stack.Screen
         options={{
           title: book?.name ?? "PDF Reader",
-          headerShown: true,
+          headerShown: false,
         }}
       />
 
-      <View style={styles.toolbar}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.back}>‹ Back</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.title} numberOfLines={1}>
-          {book?.name ?? "Book"}
-        </Text>
-
+      <View style={styles.header}>
         <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          style={styles.backButton}
+          onPress={() => router.back()}
+          activeOpacity={0.8}
+        >
+          <Feather name="arrow-left" size={20} color={INK} />
+        </TouchableOpacity>
+        <View style={styles.headerCopy}>
+          <Text style={styles.eyebrow}>TEACHER LIBRARY</Text>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            {book?.name ?? "PDF Reader"}
+          </Text>
+        </View>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Download or share PDF"
           onPress={downloadBook}
           disabled={!pdfUrl || downloading}
-          style={styles.downloadButton}
+          activeOpacity={0.85}
+          style={[
+            styles.downloadButton,
+            (!pdfUrl || downloading) && styles.downloadButtonDisabled,
+          ]}
         >
+          {downloading ? (
+            <ActivityIndicator size="small" color={WHITE} />
+          ) : (
+            <Feather name="download" size={16} color={WHITE} />
+          )}
           <Text style={styles.downloadText}>
-            {downloading ? "..." : "Download"}
+            {downloading ? "Saving" : "Save"}
           </Text>
         </TouchableOpacity>
       </View>
 
+      <View style={styles.readerHeading}>
+        <LinearGradient
+          colors={[PURPLE, PURPLE_DARK, PURPLE_BRIGHT]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.readerIcon}
+        >
+          <Feather name="book-open" size={22} color={WHITE} />
+        </LinearGradient>
+        <View style={styles.readerCopy}>
+          <Text style={styles.readerTitle}>Book reader</Text>
+          <Text style={styles.readerSubtitle}>
+            Read your study material or save a copy
+          </Text>
+        </View>
+        <View style={styles.pdfPill}>
+          <Feather name="file-text" size={12} color={PURPLE} />
+          <Text style={styles.pdfPillText}>PDF</Text>
+        </View>
+      </View>
+
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#2563EB" />
-          <Text style={styles.message}>Loading book...</Text>
+          <View style={styles.stateIcon}>
+            <ActivityIndicator size="large" color={PURPLE} />
+          </View>
+          <Text style={styles.stateTitle}>Loading your book</Text>
+          <Text style={styles.message}>Preparing the PDF for reading…</Text>
         </View>
       ) : error ? (
         <View style={styles.center}>
+          <View style={styles.stateIcon}>
+            <Feather name="alert-circle" size={25} color="#D9535D" />
+          </View>
+          <Text style={styles.stateTitle}>Couldn’t open this book</Text>
           <Text style={styles.error}>{error}</Text>
           <TouchableOpacity
+            accessibilityRole="button"
             style={styles.retry}
             onPress={() => void loadBook()}
+            activeOpacity={0.85}
           >
-            <Text style={styles.retryText}>Try Again</Text>
+            <Feather name="refresh-cw" size={15} color={WHITE} />
+            <Text style={styles.retryText}>Try again</Text>
           </TouchableOpacity>
         </View>
       ) : pdfUrl ? (
-        <View style={styles.viewer}>
-          {webLoading && (
-            <View style={styles.loadingOverlay}>
-              <ActivityIndicator size="large" color="#2563EB" />
-              <Text style={styles.message}>Opening PDF...</Text>
+        <View style={styles.viewerCard}>
+          <View style={styles.viewerTopbar}>
+            <View style={styles.viewerDot} />
+            <Text style={styles.viewerLabel}>DOCUMENT PREVIEW</Text>
+            <View style={styles.viewerSecure}>
+              <Feather name="shield" size={12} color="#15966A" />
+              <Text style={styles.viewerSecureText}>Secure link</Text>
             </View>
-          )}
+          </View>
 
-          <WebView
-            key={pdfUrl}
-            source={{
-              uri: `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(pdfUrl)}`,
-            }}
-            style={styles.webview}
-            originWhitelist={["*"]}
-            javaScriptEnabled
-            domStorageEnabled
-            startInLoadingState
-            onLoadEnd={() => setWebLoading(false)}
-            onError={() => setWebLoading(false)}
-          />
+          <View style={styles.viewer}>
+            {webLoading && (
+              <View style={styles.loadingOverlay}>
+                <ActivityIndicator size="large" color={PURPLE} />
+                <Text style={styles.stateTitle}>Opening PDF</Text>
+                <Text style={styles.message}>This may take a moment…</Text>
+              </View>
+            )}
+
+            <WebView
+              key={pdfUrl}
+              source={{
+                uri: `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(pdfUrl)}`,
+              }}
+              style={styles.webview}
+              originWhitelist={["*"]}
+              javaScriptEnabled
+              domStorageEnabled
+              startInLoadingState
+              onLoadEnd={() => setWebLoading(false)}
+              onError={() => setWebLoading(false)}
+            />
+          </View>
 
           {!webLoading && (
             <TouchableOpacity
+              accessibilityRole="button"
               style={styles.openButton}
               onPress={() => void Linking.openURL(pdfUrl)}
+              activeOpacity={0.8}
             >
+              <Feather name="external-link" size={16} color={PURPLE} />
               <Text style={styles.openButtonText}>Open PDF directly</Text>
             </TouchableOpacity>
           )}
         </View>
       ) : null}
+
+      <View style={styles.footer}>
+        <Feather name="book-open" size={13} color={MUTED} />
+        <Text style={styles.footerText}>
+          GyanDeep Academy · Teacher Library
+        </Text>
+      </View>
     </SafeAreaView>
   );
 }
@@ -205,88 +288,260 @@ export default function TeacherBookViewer() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F4F7FB",
+    backgroundColor: BG,
   },
-  toolbar: {
-    minHeight: 56,
-    paddingHorizontal: 12,
+  header: {
+    minHeight: 72,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingTop: 35,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+    gap: 11,
+    backgroundColor: BG,
   },
-  back: {
-    color: "#2563EB",
-    fontSize: 14,
-    fontWeight: "700",
+  backButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 15,
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  title: {
+  headerCopy: {
     flex: 1,
-    color: "#1D2D44",
-    fontSize: 14,
-    fontWeight: "700",
+    minWidth: 0,
+  },
+  eyebrow: {
+    color: PURPLE,
+    fontSize: 9,
+    letterSpacing: 1.35,
+    fontWeight: "800",
+  },
+  headerTitle: {
+    color: INK,
+    fontSize: 16,
+    fontWeight: "800",
+    marginTop: 3,
   },
   downloadButton: {
-    backgroundColor: "#2563EB",
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    borderRadius: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    minHeight: 42,
+    paddingHorizontal: 13,
+    borderRadius: 14,
+    backgroundColor: PURPLE,
+  },
+  downloadButtonDisabled: {
+    opacity: 0.55,
   },
   downloadText: {
-    color: "#FFFFFF",
+    color: WHITE,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "800",
+  },
+  readerHeading: {
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 14,
+    padding: 14,
+    borderRadius: 20,
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  readerIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  readerCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  readerTitle: {
+    color: INK,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  readerSubtitle: {
+    color: MUTED,
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 4,
+  },
+  pdfPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: LAVENDER,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+  pdfPillText: {
+    color: PURPLE,
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.6,
+  },
+  viewerCard: {
+    flex: 1,
+    marginHorizontal: 12,
+    marginBottom: 8,
+    overflow: "hidden",
+    borderRadius: 20,
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    shadowColor: "#321064",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  viewerTopbar: {
+    minHeight: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+    backgroundColor: WHITE,
+  },
+  viewerDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: PURPLE,
+  },
+  viewerLabel: {
+    flex: 1,
+    color: MUTED,
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
+  viewerSecure: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#E4F7EF",
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 10,
+  },
+  viewerSecureText: {
+    color: "#15966A",
+    fontSize: 9,
+    fontWeight: "800",
   },
   viewer: {
     flex: 1,
+    backgroundColor: BG,
   },
   webview: {
     flex: 1,
-    backgroundColor: "#F4F7FB",
+    backgroundColor: BG,
   },
   center: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: 24,
+    paddingHorizontal: 28,
+    paddingVertical: 30,
+  },
+  stateIcon: {
+    width: 62,
+    height: 62,
+    borderRadius: 21,
+    backgroundColor: LAVENDER,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  stateTitle: {
+    color: INK,
+    fontSize: 17,
+    fontWeight: "800",
+    textAlign: "center",
+    marginTop: 12,
   },
   message: {
-    color: "#64748B",
-    marginTop: 10,
-    fontSize: 14,
+    color: MUTED,
+    marginTop: 7,
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "center",
   },
   error: {
-    color: "#B91C1C",
+    color: "#B42332",
     textAlign: "center",
-    fontSize: 15,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 8,
   },
   retry: {
-    marginTop: 16,
-    backgroundColor: "#2563EB",
-    paddingHorizontal: 20,
-    paddingVertical: 11,
-    borderRadius: 8,
+    marginTop: 18,
+    backgroundColor: PURPLE,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 13,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   retryText: {
-    color: "#FFFFFF",
-    fontWeight: "700",
+    color: WHITE,
+    fontWeight: "800",
+    fontSize: 12,
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFill,
     zIndex: 1,
-    backgroundColor: "#F4F7FB",
+    backgroundColor: BG,
     alignItems: "center",
     justifyContent: "center",
+    padding: 20,
   },
   openButton: {
-    padding: 14,
+    minHeight: 48,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    gap: 8,
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    backgroundColor: WHITE,
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
   },
   openButtonText: {
-    color: "#2563EB",
-    fontWeight: "700",
+    color: PURPLE,
+    fontWeight: "800",
+    fontSize: 12,
+  },
+  footer: {
+    minHeight: 28,
+    paddingHorizontal: 16,
+    paddingBottom: 17,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  footerText: {
+    color: MUTED,
+    fontSize: 10,
+    fontWeight: "600",
   },
 });

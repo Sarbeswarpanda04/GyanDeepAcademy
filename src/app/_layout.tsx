@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Stack, router, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -38,7 +37,7 @@ export default function RootLayout() {
       if (sessionError) {
         console.warn(
           "[auth-startup] Could not restore session:",
-          sessionError.message
+          sessionError.message,
         );
         return;
       }
@@ -67,29 +66,24 @@ export default function RootLayout() {
         return;
       }
 
-      const { data: membership, error: membershipError } =
-        await supabase
-          .from("institute_team_members")
-          .select("id")
-          .eq("user_id", session.user.id)
-          .eq("role", "teacher")
-          .eq("is_active", true)
-          .limit(1)
-          .maybeSingle();
+      const { data: membership, error: membershipError } = await supabase
+        .from("institute_team_members")
+        .select("id")
+        .eq("user_id", session.user.id)
+        .eq("role", "teacher")
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle();
 
       if (membershipError) {
         console.warn(
           "[auth-startup] Teacher membership check failed:",
-          membershipError.message
+          membershipError.message,
         );
         return;
       }
 
-      if (
-        !membership ||
-        !mountedRef.current ||
-        redirectingRef.current
-      ) {
+      if (!membership || !mountedRef.current || redirectingRef.current) {
         return;
       }
 
@@ -173,7 +167,6 @@ export default function RootLayout() {
     return <AppLoadingScreen />;
   }
 
-  
   return (
     <Stack
       screenOptions={{
@@ -195,7 +188,6 @@ export default function RootLayout() {
       <Stack.Screen name="student-details-document" />
       <Stack.Screen name="student-id-card" />
       <Stack.Screen name="student-id-card-settings" />
-      <Stack.Screen name="teachers" />
       <Stack.Screen name="attendance" />
       <Stack.Screen name="fees" />
       <Stack.Screen name="settings" />
@@ -204,6 +196,8 @@ export default function RootLayout() {
       <Stack.Screen name="batches" />
       <Stack.Screen name="teacher/teacher-login" />
       <Stack.Screen name="teacher/teacher-dashboard" />
+      <Stack.Screen name="notices" />
+      <Stack.Screen name="notice-compose" />
     </Stack>
   );
 }

@@ -16,6 +16,7 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { supabase } from "../lib/supabase";
 import AppAlert, {
@@ -46,26 +47,27 @@ type AlertState = {
 };
 
 const C = {
-  background: "#F2F8FF",
+  background: "#F3F3FF",
   white: "#FFFFFF",
-  softBlue: "#E7F2FF",
-  primary: "#3988E8",
-  primaryDark: "#2169C4",
-  border: "#D8E8F8",
-  text: "#183653",
-  secondary: "#71869C",
-  muted: "#91A5BA",
+  softBlue: "#EEE8FF",
+  primary: "#4C02F7",
+  primaryDark: "#44109D",
+  border: "#E8E3F5",
+  text: "#1F2937",
+  secondary: "#718096",
+  muted: "#9CA3AF",
+  lavender: "#C4B5FD",
   green: "#21815F",
   red: "#C94040",
 };
 
 const CHIP_PALETTE = [
-  { bg: "#E4F1FF", fg: "#286DB7" },
-  { bg: "#E3F6ED", fg: "#21815F" },
-  { bg: "#FFF0DF", fg: "#A96521" },
-  { bg: "#F0E9FF", fg: "#7551B5" },
-  { bg: "#FFE8EF", fg: "#B94E72" },
-  { bg: "#DDF7F8", fg: "#187E86" },
+  { bg: "#EEE8FF", fg: "#44109D" },
+  { bg: "#F3E8FF", fg: "#611CD0" },
+  { bg: "#EDE9FE", fg: "#4C02F7" },
+  { bg: "#F5F3FF", fg: "#5B21B6" },
+  { bg: "#EAE4FF", fg: "#44109D" },
+  { bg: "#F1ECFF", fg: "#611CD0" },
 ];
 
 export default function SubjectsScreen() {
@@ -593,18 +595,23 @@ export default function SubjectsScreen() {
   return (
     <View style={styles.screen}>
       <StatusBar
-        barStyle="dark-content"
-        backgroundColor={C.background}
+        barStyle="light-content"
+        backgroundColor="#44109D"
       />
 
-      <View style={styles.header}>
+      <LinearGradient
+        colors={["#611CD0", "#44109D", "#4C02F7"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.header, { paddingTop: Platform.OS === "android" ? 35 : 14 }]}
+      >
         <Pressable
           onPress={() => router.back()}
           style={styles.backButton}
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Feather name="arrow-left" size={21} color={C.text} />
+          <Feather name="arrow-left" size={21} color="#FFFFFF" />
         </Pressable>
 
         <View style={styles.headerCopy}>
@@ -620,9 +627,9 @@ export default function SubjectsScreen() {
           accessibilityRole="button"
           accessibilityLabel="Refresh subjects"
         >
-          <Feather name="refresh-cw" size={18} color={C.primary} />
+          <Feather name="refresh-cw" size={18} color="#FFFFFF" />
         </Pressable>
-      </View>
+      </LinearGradient>
 
       <ScrollView
         style={styles.scrollView}
@@ -644,15 +651,15 @@ export default function SubjectsScreen() {
 
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
-            <View style={[styles.statIcon, { backgroundColor: "#DDEEFF" }]}>
-              <Feather name="layers" size={18} color="#2877CE" />
+            <View style={[styles.statIcon, { backgroundColor: "#EEE8FF" }]}>
+              <Feather name="layers" size={18} color="#4C02F7" />
             </View>
             <Text style={styles.statNumber}>{classes.length}</Text>
             <Text style={styles.statLabel}>Active classes</Text>
           </View>
 
           <View style={styles.statCard}>
-            <View style={[styles.statIcon, { backgroundColor: "#DFF7EE" }]}>
+            <View style={[styles.statIcon, { backgroundColor: "#EEE8FF" }]}>
               <Feather name="book" size={18} color={C.green} />
             </View>
             <Text style={styles.statNumber}>{subjects.length}</Text>
@@ -679,9 +686,23 @@ export default function SubjectsScreen() {
         </View>
 
         {loading ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color={C.primary} />
-            <Text style={styles.loadingText}>Loading your classes...</Text>
+          <View style={styles.skeletonList} accessibilityLabel="Loading classes">
+            {[0, 1, 2].map((item) => (
+              <View key={item} style={styles.skeletonCard}>
+                <View style={styles.skeletonTopRow}>
+                  <View style={styles.skeletonIcon} />
+                  <View style={styles.skeletonArrow} />
+                </View>
+                <View style={styles.skeletonTitle} />
+                <View style={styles.skeletonMeta} />
+                <View style={styles.skeletonDivider} />
+                <View style={styles.skeletonChipRow}>
+                  <View style={styles.skeletonChip} />
+                  <View style={styles.skeletonChip} />
+                  <View style={styles.skeletonChipShort} />
+                </View>
+              </View>
+            ))}
           </View>
         ) : !instituteId ? (
           <View style={styles.emptyState}>
@@ -997,11 +1018,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 18,
-    paddingTop: Platform.OS === "android" ? 35 : 10,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5EFF9",
-    backgroundColor: C.background,
+    paddingBottom: 18,
+    borderBottomLeftRadius: 26,
+    borderBottomRightRadius: 26,
   },
   backButton: {
     width: 43,
@@ -1009,29 +1028,31 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: C.white,
+    backgroundColor: "rgba(255,255,255,0.14)",
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: "rgba(255,255,255,0.24)",
   },
   headerCopy: {
     flex: 1,
     marginLeft: 12,
   },
   headerTitle: {
-    fontSize: 19,
+    fontSize: 20,
     fontWeight: "800",
-    color: C.text,
+    color: "#FFFFFF",
   },
   headerSubtitle: {
     marginTop: 3,
     fontSize: 12,
-    color: C.secondary,
+    color: "#E9DDFF",
   },
   refreshButton: {
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: C.softBlue,
+    backgroundColor: "rgba(255,255,255,0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.24)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1046,10 +1067,10 @@ const styles = StyleSheet.create({
   hero: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#E7F3FF",
+    backgroundColor: "#F3F0FF",
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: "#D4E9FF",
+    borderColor: "#E8E3F5",
     padding: 17,
     marginBottom: 17,
   },
@@ -1089,7 +1110,7 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     borderWidth: 1,
     borderColor: C.border,
-    shadowColor: "#729BC2",
+    shadowColor: "#8B5CF6",
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.07,
     shadowRadius: 7,
@@ -1137,7 +1158,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    backgroundColor: "#E3F1FF",
+    backgroundColor: "#EEE8FF",
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 7,
@@ -1163,7 +1184,7 @@ const styles = StyleSheet.create({
     backgroundColor: C.white,
     borderWidth: 1,
     borderColor: C.border,
-    shadowColor: "#729BC2",
+    shadowColor: "#8B5CF6",
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.08,
     shadowRadius: 7,
@@ -1186,7 +1207,7 @@ const styles = StyleSheet.create({
     width: 41,
     height: 41,
     borderRadius: 14,
-    backgroundColor: "#E4F1FF",
+    backgroundColor: "#EEE8FF",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1194,7 +1215,7 @@ const styles = StyleSheet.create({
     width: 29,
     height: 29,
     borderRadius: 10,
-    backgroundColor: "#F0F7FF",
+    backgroundColor: "#F3F0FF",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1223,7 +1244,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: "#EAF1F8",
+    backgroundColor: "#E8E3F5",
     marginVertical: 11,
   },
   chipContainer: {
@@ -1259,6 +1280,69 @@ const styles = StyleSheet.create({
     color: C.muted,
     lineHeight: 15,
   },
+  skeletonList: {
+    gap: 12,
+  },
+  skeletonCard: {
+    backgroundColor: C.white,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: C.border,
+    padding: 14,
+    minHeight: 170,
+  },
+  skeletonTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  skeletonIcon: {
+    width: 41,
+    height: 41,
+    borderRadius: 14,
+    backgroundColor: "#EEE8FF",
+  },
+  skeletonArrow: {
+    width: 29,
+    height: 29,
+    borderRadius: 10,
+    backgroundColor: "#F3F0FF",
+  },
+  skeletonTitle: {
+    height: 14,
+    width: "48%",
+    borderRadius: 7,
+    backgroundColor: "#EAE4FF",
+    marginTop: 14,
+  },
+  skeletonMeta: {
+    height: 10,
+    width: "32%",
+    borderRadius: 5,
+    backgroundColor: "#F0ECFA",
+    marginTop: 9,
+  },
+  skeletonDivider: {
+    height: 1,
+    backgroundColor: C.border,
+    marginVertical: 12,
+  },
+  skeletonChipRow: {
+    flexDirection: "row",
+    gap: 7,
+  },
+  skeletonChip: {
+    width: 66,
+    height: 30,
+    borderRadius: 9,
+    backgroundColor: "#EEE8FF",
+  },
+  skeletonChipShort: {
+    width: 48,
+    height: 30,
+    borderRadius: 9,
+    backgroundColor: "#F3F0FF",
+  },
   loadingBox: {
     minHeight: 200,
     alignItems: "center",
@@ -1288,7 +1372,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#E4F1FF",
+    backgroundColor: "#EEE8FF",
     marginBottom: 15,
   },
   emptyTitle: {
@@ -1329,9 +1413,9 @@ const styles = StyleSheet.create({
     marginTop: 10,
     borderRadius: 15,
     borderWidth: 1,
-    borderColor: "#C9E1FA",
+    borderColor: "#C4B5FD",
     borderStyle: "dashed",
-    backgroundColor: "#F8FBFF",
+    backgroundColor: "#FFFFFF",
   },
   manageClassesText: {
     color: C.primaryDark,
@@ -1361,11 +1445,11 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
   },
   sheet: {
-    backgroundColor: "#F8FBFF",
+    backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     borderWidth: 1,
-    borderColor: "#DCEBFA",
+    borderColor: "#E8E3F5",
     paddingHorizontal: 22,
     paddingTop: 12,
     paddingBottom: Platform.OS === "ios" ? 34 : 25,
@@ -1378,7 +1462,7 @@ const styles = StyleSheet.create({
     width: 43,
     height: 5,
     borderRadius: 3,
-    backgroundColor: "#D0DFEE",
+    backgroundColor: "#C4B5FD",
     marginBottom: 20,
   },
   sheetHeader: {
@@ -1390,7 +1474,7 @@ const styles = StyleSheet.create({
     width: 49,
     height: 49,
     borderRadius: 16,
-    backgroundColor: "#DDEEFF",
+    backgroundColor: "#EEE8FF",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1400,7 +1484,7 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#EAF3FC",
+    backgroundColor: "#F3F0FF",
   },
   sheetTitle: {
     fontSize: 23,
@@ -1433,7 +1517,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     borderRadius: 15,
     borderWidth: 1,
-    borderColor: "#C9E1FA",
+    borderColor: "#C4B5FD",
     backgroundColor: C.white,
   },
   textInput: {

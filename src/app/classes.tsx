@@ -18,15 +18,16 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
 
-const NAVY = "#26374D";
-const BG = "#F1F5F8";
-const MUTED = "#9DB1BE";
-const ICON = "#536B83";
-const BORDER = "#DCE5EC";
+const NAVY = "#611CD0";
+const BG = "#F3F3FF";
+const MUTED = "#718096";
+const ICON = "#718096";
+const BORDER = "#E8E3F5";
 const RED = "#E53935";
 const GREEN = "#27834B";
 const WHITE = "#FFFFFF";
@@ -428,24 +429,33 @@ export default function ClassesScreen() {
   return (
     <View style={styles.screen}>
       <StatusBar
-        barStyle="dark-content"
-        backgroundColor={WHITE}
+        barStyle="light-content"
+        backgroundColor="#44109D"
         translucent={false}
       />
 
-      {/* Compact page header */}
-      <View style={styles.header}>
+      {/* Official GyanDeep Academy purple gradient header */}
+      <LinearGradient
+        colors={["#611CD0", "#44109D", "#4C02F7"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
+      >
         <TouchableOpacity
           style={styles.backButton}
           accessibilityLabel="Go back"
           onPress={() => router.back()}
         >
-          <Feather name="chevron-left" size={29} color={NAVY} />
+          <Feather name="chevron-left" size={29} color={WHITE} />
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>Classes</Text>
+        <View style={styles.headerCopy}>
+          <Text style={styles.headerTitle}>Classes</Text>
+          <Text style={styles.headerSubtitle}>Manage your classes and fees</Text>
+        </View>
 
         <TouchableOpacity
+          style={styles.headerCountButton}
           activeOpacity={0.7}
           onPress={() => setShowInactive((value) => !value)}
         >
@@ -455,13 +465,21 @@ export default function ClassesScreen() {
               : `${activeClasses.length} active`}
           </Text>
         </TouchableOpacity>
-      </View>
+      </LinearGradient>
 
       <View style={styles.body}>
         {loading ? (
-          <View style={styles.centerState}>
-            <ActivityIndicator size="large" color={NAVY} />
-            <Text style={styles.stateSubtitle}>Loading classes...</Text>
+          <View style={styles.listContent}>
+            {[0, 1, 2, 3].map((key) => (
+              <View key={key} style={styles.skeletonCard}>
+                <View style={styles.skeletonIcon} />
+                <View style={styles.skeletonTextGroup}>
+                  <View style={styles.skeletonTitle} />
+                  <View style={styles.skeletonSubtitle} />
+                </View>
+                <View style={styles.skeletonAction} />
+              </View>
+            ))}
           </View>
         ) : loadError ? (
           <View style={styles.centerState}>
@@ -603,7 +621,7 @@ export default function ClassesScreen() {
                 value={className}
                 onChangeText={setClassName}
                 placeholder="e.g. Class 10"
-                placeholderTextColor="#A0A9B5"
+                placeholderTextColor="#9CA3AF"
                 style={styles.input}
                 autoFocus
                 maxLength={100}
@@ -622,7 +640,7 @@ export default function ClassesScreen() {
                   setDefaultFee(value.replace(/[^\d.]/g, ""))
                 }
                 placeholder="e.g. 500"
-                placeholderTextColor="#A0A9B5"
+                placeholderTextColor="#9CA3AF"
                 style={styles.input}
                 keyboardType="decimal-pad"
                 editable={!saving}
@@ -846,33 +864,48 @@ const styles = StyleSheet.create({
     backgroundColor: BG,
   },
   header: {
-    backgroundColor: WHITE,
-    minHeight: 68,
-    paddingTop: 35,
+    minHeight: 112,
+    paddingTop: 42,
     paddingHorizontal: 16,
-    paddingBottom: 10,
+    paddingBottom: 18,
     flexDirection: "row",
     alignItems: "center",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E6ECF1",
+    borderBottomLeftRadius: 25,
+    borderBottomRightRadius: 25,
     gap: 10,
   },
+  headerCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  headerSubtitle: {
+    color: "rgba(255,255,255,0.82)",
+    fontSize: 12,
+    marginTop: 3,
+  },
+  headerCountButton: {
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.22)",
+  },
   backButton: {
-    width: 32,
+    width: 34,
     height: 42,
     alignItems: "flex-start",
     justifyContent: "center",
   },
   headerTitle: {
-    flex: 1,
-    color: NAVY,
+    color: WHITE,
     fontSize: 23,
     fontWeight: "800",
   },
   headerCount: {
-    color: MUTED,
-    fontSize: 13,
-    fontWeight: "600",
+    color: WHITE,
+    fontSize: 12,
+    fontWeight: "700",
   },
   body: {
     flex: 1,
@@ -882,6 +915,45 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 100,
     gap: 12,
+  },
+  skeletonCard: {
+    minHeight: 86,
+    backgroundColor: WHITE,
+    borderRadius: 22,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 12,
+  },
+  skeletonIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: "#EDE9FE",
+  },
+  skeletonTextGroup: {
+    flex: 1,
+    gap: 9,
+  },
+  skeletonTitle: {
+    width: "68%",
+    height: 13,
+    borderRadius: 7,
+    backgroundColor: "#EDE9FE",
+  },
+  skeletonSubtitle: {
+    width: "42%",
+    height: 10,
+    borderRadius: 6,
+    backgroundColor: "#F3F0FF",
+  },
+  skeletonAction: {
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    backgroundColor: "#F3F0FF",
   },
   classCard: {
     minHeight: 86,
@@ -903,7 +975,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 16,
-    backgroundColor: "#DEE7EE",
+    backgroundColor: "#EDE9FE",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -950,7 +1022,7 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 28,
-    backgroundColor: "#EBF0F5",
+    backgroundColor: "#EDE9FE",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 24,
@@ -1007,7 +1079,7 @@ const styles = StyleSheet.create({
     right: 16,
     minHeight: 54,
     borderRadius: 27,
-    backgroundColor: "#202D3F",
+    backgroundColor: "#611CD0",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -1032,7 +1104,7 @@ const styles = StyleSheet.create({
   },
   scrim: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: "rgba(17, 27, 40, 0.38)",
+    backgroundColor: "rgba(49, 24, 92, 0.38)",
   },
   formSheet: {
     backgroundColor: WHITE,
@@ -1050,7 +1122,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 4,
     borderRadius: 2,
-    backgroundColor: "#D9E1E8",
+    backgroundColor: "#DDD6FE",
     marginBottom: 14,
   },
   sheetHeader: {
@@ -1068,12 +1140,12 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 12,
-    backgroundColor: "#F0F3F6",
+    backgroundColor: "#F3F0FF",
     alignItems: "center",
     justifyContent: "center",
   },
   inputLabel: {
-    color: "#151B23",
+    color: "#1F2937",
     fontSize: 14,
     fontWeight: "600",
     marginBottom: 9,
@@ -1126,7 +1198,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   submitDisabled: {
-    backgroundColor: "#CFD4DA",
+    backgroundColor: "#C4B5FD",
   },
   submitText: {
     color: WHITE,
@@ -1137,7 +1209,7 @@ const styles = StyleSheet.create({
   // Three-dot action menu
   menuOverlay: {
     flex: 1,
-    backgroundColor: "rgba(17, 27, 40, 0.08)",
+    backgroundColor: "rgba(49, 24, 92, 0.08)",
   },
   menuCard: {
     position: "absolute",
@@ -1182,7 +1254,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: "#6D788A",
+    backgroundColor: "#7C3AED",
     alignItems: "center",
     justifyContent: "center",
   },
