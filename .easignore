@@ -1,4 +1,3 @@
-
 # Dependencies
 node_modules/
 
@@ -15,7 +14,7 @@ expo-env.d.ts
 *.apk
 *.aab
 
-# Signing credentials - never commit these
+# Signing credentials - never upload these
 *.jks
 *.keystore
 *.p8
@@ -43,7 +42,10 @@ yarn-error.*
 # TypeScript
 *.tsbuildinfo
 
-# Generated native folders
-# Keep /android tracked because it contains your native configuration.
-# Ignore /ios only if you do not need to preserve its native project.
- /ios
+# Android generated build files
+/android/build/
+/android/app/build/
+/android/.gradle/
+
+# iOS native project
+/ios/

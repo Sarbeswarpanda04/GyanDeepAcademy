@@ -25,12 +25,13 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
 import AppAlert, { AppAlertType } from "../components/AppAlert";
+import { LinearGradient } from "expo-linear-gradient";
 
-const N = "#202F42",
-  BG = "#F1F5F8",
-  M = "#8192A3",
-  B = "#E1E8EF",
-  G = "#17856B",
+const N = "#24134D",
+  BG = "#F7F5FC",
+  M = "#817794",
+  B = "#E9E3F2",
+  G = "#611CD0",
   R = "#D95362",
   W = "#FFFFFF",
   BUCKET = "institute-assets";
@@ -48,13 +49,7 @@ type Expense = {
   payment_mode: Mode;
   created_at: string;
 };
-const MODES: Mode[] = [
-  "Cash",
-  "UPI",
-  "Bank transfer",
-  "Card",
-  "Other",
-];
+const MODES: Mode[] = ["Cash", "UPI", "Bank transfer", "Card", "Other"];
 const money = (n: number) =>
   `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const iso = (d: Date) =>
@@ -422,8 +417,13 @@ export default function ExpensesScreen() {
   );
   return (
     <View style={s.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={N} />
-      <View style={[s.header, { paddingTop: Math.max(insets.top, 12) }]}>
+      <StatusBar barStyle="light-content" backgroundColor="#44109D" />
+      <LinearGradient
+        colors={["#611CD0", "#44109D", "#4C02F7"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[s.header, { paddingTop: Math.max(insets.top, 12) }]}
+      >
         <TouchableOpacity style={s.back} onPress={() => router.back()}>
           <Feather name="arrow-left" size={22} color={W} />
         </TouchableOpacity>
@@ -435,7 +435,7 @@ export default function ExpensesScreen() {
           <Feather name="plus" size={18} color={N} />
           <Text style={s.addText}>Add</Text>
         </TouchableOpacity>
-      </View>
+      </LinearGradient>
       <ScrollView
         contentContainerStyle={s.content}
         refreshControl={
@@ -449,13 +449,18 @@ export default function ExpensesScreen() {
         }
       >
         <View style={s.summaries}>
-          <View style={[s.summary, { backgroundColor: N }]}>
+          <LinearGradient
+            colors={["#611CD0", "#44109D", "#4C02F7"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={s.summary}
+          >
             <Feather name="trending-up" size={20} color={W} />
             <Text style={s.sumLabelLight}>Total expenses</Text>
             <Text style={s.sumValueLight}>{money(total)}</Text>
             <Text style={s.sumFootLight}>{rows.length} records</Text>
-          </View>
-          <View style={[s.summary, { backgroundColor: "#E4F4ED" }]}>
+          </LinearGradient>
+          <View style={[s.summary, { backgroundColor: "#EEE7FC" }]}>
             <Feather name="calendar" size={20} color={G} />
             <Text style={s.sumLabelDark}>This month</Text>
             <Text style={s.sumValueDark}>{money(monthly)}</Text>
@@ -662,7 +667,7 @@ export default function ExpensesScreen() {
                   setImageUrl(null);
                 }}
               >
-                <Text style={{ color: R, marginTop: 7, }}>Remove image</Text>
+                <Text style={{ color: R, marginTop: 7 }}>Remove image</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
@@ -709,7 +714,7 @@ export default function ExpensesScreen() {
               activeOpacity={0.8}
               onPress={chooseCamera}
             >
-              <View style={[s.sourceIcon, { backgroundColor: "#E5F5EF" }]}>
+              <View style={[s.sourceIcon, { backgroundColor: "#F0E9FC" }]}>
                 <Feather name="camera" size={22} color={G} />
               </View>
               <View style={{ flex: 1 }}>
@@ -723,7 +728,7 @@ export default function ExpensesScreen() {
               activeOpacity={0.8}
               onPress={chooseGallery}
             >
-              <View style={[s.sourceIcon, { backgroundColor: "#E8EFF8" }]}>
+              <View style={[s.sourceIcon, { backgroundColor: "#F0E9FC" }]}>
                 <Feather name="image" size={22} color={N} />
               </View>
               <View style={{ flex: 1 }}>
@@ -757,8 +762,8 @@ export default function ExpensesScreen() {
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: BG },
   header: {
-    backgroundColor: N,
-    paddingHorizontal: 15,
+    backgroundColor: "transparent",
+    paddingHorizontal: 17,
     paddingBottom: 17,
     flexDirection: "row",
     alignItems: "center",
@@ -767,8 +772,8 @@ const s = StyleSheet.create({
   back: {
     width: 42,
     height: 42,
-    borderRadius: 14,
-    backgroundColor: "#34465C",
+    borderRadius: 15,
+    backgroundColor: "rgba(255,255,255,0.18)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -789,9 +794,10 @@ const s = StyleSheet.create({
   summary: {
     flex: 1,
     minWidth: 0,
-    borderRadius: 19,
-    padding: 14,
+    borderRadius: 21,
+    padding: 15,
     minHeight: 145,
+    overflow: "hidden",
   },
   sumLabelLight: {
     fontSize: 12,
@@ -803,23 +809,23 @@ const s = StyleSheet.create({
   sumFootLight: { fontSize: 11, color: "#C8D3E0", marginTop: 5 },
   sumLabelDark: {
     fontSize: 12,
-    color: "#4F7667",
+    color: "#76649A",
     marginTop: 10,
     fontWeight: "700",
   },
   sumValueDark: {
     fontSize: 19,
-    color: "#12664F",
+    color: "#44109D",
     fontWeight: "900",
     marginTop: 8,
   },
-  sumFootDark: { fontSize: 11, color: "#4F7667", marginTop: 5 },
+  sumFootDark: { fontSize: 11, color: "#76649A", marginTop: 5 },
   search: {
     backgroundColor: W,
     borderWidth: 1,
     borderColor: B,
-    borderRadius: 14,
-    paddingHorizontal: 12,
+    borderRadius: 16,
+    paddingHorizontal: 14,
     flexDirection: "row",
     alignItems: "center",
     gap: 9,
@@ -832,7 +838,7 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: B,
     backgroundColor: W,
-    borderRadius: 18,
+    borderRadius: 20,
     paddingHorizontal: 13,
     paddingVertical: 7,
   },
@@ -842,8 +848,8 @@ const s = StyleSheet.create({
     backgroundColor: W,
     borderWidth: 1,
     borderColor: B,
-    borderRadius: 17,
-    padding: 13,
+    borderRadius: 19,
+    padding: 14,
   },
   row: { flexDirection: "row", alignItems: "center", gap: 10 },
   thumb: { width: 100, height: 100, borderRadius: 13 },
@@ -851,7 +857,7 @@ const s = StyleSheet.create({
     width: 70,
     height: 70,
     borderRadius: 13,
-    backgroundColor: "#E9EFF5",
+    backgroundColor: "#F0EBF8",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -911,9 +917,9 @@ const s = StyleSheet.create({
     backgroundColor: W,
     borderWidth: 1,
     borderColor: B,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
+    borderRadius: 14,
+    paddingHorizontal: 13,
+    paddingVertical: 12,
     color: N,
     fontSize: 14,
     minHeight: 45,
@@ -922,8 +928,8 @@ const s = StyleSheet.create({
   totalBox: {
     marginTop: 13,
     padding: 14,
-    borderRadius: 13,
-    backgroundColor: "#E4F4ED",
+    borderRadius: 15,
+    backgroundColor: "#EEE7FC",
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -949,7 +955,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 9,
   },
-  modeSelected: { borderColor: G, backgroundColor: "#E5F5EF" },
+  modeSelected: { borderColor: G, backgroundColor: "#F0E9FC" },
   imageBox: {
     minHeight: 100,
     backgroundColor: W,
@@ -966,7 +972,7 @@ const s = StyleSheet.create({
     marginTop: 22,
     minHeight: 49,
     borderRadius: 14,
-    backgroundColor: N,
+    backgroundColor: "#611CD0",
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -998,7 +1004,7 @@ const s = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 17,
-    backgroundColor: "#E5F5EF",
+    backgroundColor: "#F0E9FC",
     alignItems: "center",
     justifyContent: "center",
     alignSelf: "center",
@@ -1027,7 +1033,7 @@ const s = StyleSheet.create({
     borderColor: B,
     borderRadius: 17,
     marginBottom: 10,
-    backgroundColor: "#FBFCFE",
+    backgroundColor: "#FCFAFF",
   },
   sourceIcon: {
     width: 60,
@@ -1041,7 +1047,7 @@ const s = StyleSheet.create({
   sourceCancel: {
     minHeight: 60,
     borderRadius: 14,
-    backgroundColor: "#F0F3F6",
+    backgroundColor: "#F1ECF8",
     alignItems: "center",
     justifyContent: "center",
     marginTop: 3,

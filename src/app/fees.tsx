@@ -17,25 +17,28 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import ViewShot from "react-native-view-shot";
 import * as Sharing from 'expo-sharing';
 import { Share } from 'react-native';
 import { useFocusEffect } from "expo-router";
 
 import { supabase } from "../lib/supabase";
-import InstituteHeader from "../components/InstituteHeader";
 import FloatingTabBar from "../components/FloatingTabBar";
 import AppAlert from "../components/AppAlert";
 
-const NAVY = "#10264A";
-const GOLD = "#F3C969";
-const BG = "#F3F6FA";
+const NAVY = "#351078";
+const GOLD = "#E9D8FF";
+const PURPLE = "#611CD0";
+const PURPLE_DARK = "#44109D";
+const PURPLE_BRIGHT = "#4C02F7";
+const BG = "#F5F2FF";
 const WHITE = "#FFFFFF";
 const MUTED = "#7C899D";
 const GREEN = "#188653";
 const RED = "#D54848";
 const AMBER = "#B7791F";
-const BORDER = "#E5EAF1";
+const BORDER = "#E9E2F7";
 
 type Frequency =
   | "monthly"
@@ -1343,20 +1346,54 @@ const shareReceiptText = async () => {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={NAVY} />
-      <InstituteHeader subtitle="Fees & payments" />
+      <StatusBar barStyle="light-content" backgroundColor={PURPLE_DARK} />
 
-      <View style={styles.pageHeader}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.pageTitle}>Fees Management</Text>
-          <Text style={styles.pageSubtitle}>
-            Manage student fees, dues and payments
-          </Text>
+      <LinearGradient
+        colors={["#611CD0", "#44109D", "#4C02F7"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.heroHeader}
+      >
+        <View style={styles.heroTopRow}>
+          <View style={styles.heroBrand}>
+            <View style={styles.heroIcon}>
+              <Feather name="book-open" size={19} color="#FFFFFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.heroEyebrow}>{instituteName}</Text>
+              <Text style={styles.heroTitle}>Fees Management</Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.heroRefreshButton}
+            onPress={refresh}
+            activeOpacity={0.8}
+            disabled={refreshing || loading}
+          >
+            {refreshing || loading ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Feather name="refresh-cw" size={18} color="#FFFFFF" />
+            )}
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity style={styles.refreshButton} onPress={refresh}>
-          <Feather name="refresh-cw" size={18} color={NAVY} />
-        </TouchableOpacity>
-      </View>
+        <Text style={styles.heroSubtitle}>
+          Track collections, pending dues and payment history
+        </Text>
+        <View style={styles.heroFooter}>
+          <View style={styles.heroFooterItem}>
+            <Feather name="users" size={13} color="#E9D8FF" />
+            <Text style={styles.heroFooterText}>{students.length} students</Text>
+          </View>
+          <View style={styles.heroFooterDot} />
+          <View style={styles.heroFooterItem}>
+            <Feather name="shield-check" size={13} color="#E9D8FF" />
+            <Text style={styles.heroFooterText}>
+              {canCollect ? "Collection enabled" : "View only"}
+            </Text>
+          </View>
+        </View>
+      </LinearGradient>
 
       {!!errorMessage && (
         <TouchableOpacity
@@ -1399,7 +1436,7 @@ const shareReceiptText = async () => {
               <Feather
                 name={value === "Dues" ? "users" : "clock"}
                 size={16}
-                color={activeTab === value ? GOLD : MUTED}
+                color={activeTab === value ? WHITE : MUTED}
               />
               <Text
                 style={[
@@ -2370,25 +2407,72 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   content: { paddingHorizontal: 16, paddingBottom: 125 },
 
-  pageHeader: {
+  heroHeader: {
+    paddingTop: Platform.OS === "android" ? 30 : 14,
+    paddingHorizontal: 20,
+    paddingBottom: 23,
+    borderBottomLeftRadius: 27,
+    borderBottomRightRadius: 27,
+    marginBottom: 17,
+  },
+  heroTopRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 18,
-    paddingTop: 16,
-    paddingBottom: 14,
+    justifyContent: "space-between",
     gap: 12,
   },
-  pageTitle: { fontSize: 23, fontWeight: "800", color: NAVY },
-  pageSubtitle: { fontSize: 12, color: MUTED, marginTop: 4 },
-  refreshButton: {
+  heroBrand: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  heroIcon: {
+    width: 43,
+    height: 43,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.17)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.22)",
+  },
+  heroEyebrow: {
+    color: "#E8DFFF",
+    fontSize: 11,
+    fontWeight: "700",
+    marginBottom: 3,
+  },
+  heroTitle: { color: "#FFFFFF", fontSize: 22, fontWeight: "900" },
+  heroSubtitle: {
+    color: "#E8DFFF",
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 13,
+  },
+  heroRefreshButton: {
     width: 42,
     height: 42,
-    backgroundColor: WHITE,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.16)",
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "rgba(255,255,255,0.24)",
+  },
+  heroFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 15,
+  },
+  heroFooterItem: { flexDirection: "row", alignItems: "center", gap: 6 },
+  heroFooterText: { color: "#FFFFFF", fontSize: 10, fontWeight: "700" },
+  heroFooterDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: "#D8C4FF",
   },
 
   errorBanner: {
@@ -2434,7 +2518,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     padding: 4,
     borderRadius: 15,
-    backgroundColor: "#E6EBF3",
+    backgroundColor: "#EDE7FA",
     marginBottom: 15,
   },
   tab: {
@@ -2446,7 +2530,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 12,
   },
-  activeTab: { backgroundColor: NAVY },
+  activeTab: { backgroundColor: PURPLE },
   tabText: { color: MUTED, fontSize: 12, fontWeight: "700" },
   activeTabText: { color: WHITE },
 
@@ -2481,9 +2565,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 9,
   },
-  filterChipActive: { backgroundColor: NAVY, borderColor: NAVY },
+  filterChipActive: { backgroundColor: PURPLE, borderColor: PURPLE },
   filterChipText: { color: MUTED, fontSize: 12, fontWeight: "700" },
-  filterChipTextActive: { color: GOLD },
+  filterChipTextActive: { color: WHITE },
 
   listHeadingRow: {
     flexDirection: "row",
@@ -2563,7 +2647,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: NAVY,
+    backgroundColor: PURPLE,
     borderRadius: 11,
     paddingHorizontal: 13,
     paddingVertical: 9,
@@ -2823,7 +2907,7 @@ const styles = StyleSheet.create({
     backgroundColor: WHITE,
     paddingVertical: 12,
   },
-  methodButtonActive: { backgroundColor: NAVY, borderColor: NAVY },
+  methodButtonActive: { backgroundColor: PURPLE, borderColor: PURPLE },
   methodText: { color: NAVY, fontSize: 11, fontWeight: "800" },
   methodTextActive: { color: GOLD },
   submitButton: {
@@ -2831,7 +2915,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 9,
-    backgroundColor: NAVY,
+    backgroundColor: PURPLE,
     borderRadius: 14,
     minHeight: 50,
     marginTop: 8,
@@ -2893,7 +2977,7 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   receiptAmountBox: {
-    backgroundColor: NAVY,
+    backgroundColor: PURPLE_DARK,
     alignItems: "center",
     borderRadius: 14,
     padding: 15,

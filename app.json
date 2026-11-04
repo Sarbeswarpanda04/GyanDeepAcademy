@@ -1,3 +1,4 @@
+
 {
   "expo": {
     "name": "GyanDeepAcademy",
@@ -7,6 +8,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "gyandeepacademy",
     "userInterfaceStyle": "light",
+
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#061A35",
@@ -20,16 +22,16 @@
         "android.permission.INTERNET",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.INTERNET",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE"
+        "android.permission.POST_NOTIFICATIONS"
       ],
       "package": "com.sarbeswarpanda.GyanDeepAcademy"
     },
+
     "web": {
       "output": "server",
       "favicon": "./assets/images/favicon.png"
     },
+
     "plugins": [
       "expo-router",
       [
@@ -62,22 +64,36 @@
             "enableShrinkResourcesInReleaseBuilds": true
           }
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "default"
+        }
       ]
     ],
+
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
+
     "extra": {
       "router": {},
       "eas": {
         "projectId": "c707a282-0278-473c-8098-d8bad87dd1b6"
       }
     },
-   "runtimeVersion": "1.0.0",
+
+    "runtimeVersion": "1.0.0",
+
     "updates": {
-      "url": "https://u.expo.dev/c707a282-0278-473c-8098-d8bad87dd1b6"
+      "url": "https://u.expo.dev/c707a282-0278-473c-8098-d8bad87dd1b6",
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
     },
+
     "ios": {}
   }
 }

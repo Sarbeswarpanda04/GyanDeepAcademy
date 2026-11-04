@@ -36,61 +36,23 @@ const GREEN = "#18845D";
 const OPTIONS = [
   {
     code: "present",
-
     short: "P",
-
     label: "Present",
-
     color: "#E5F4E5",
-
     ink: "#397D40",
   },
-
   {
     code: "absent",
-
     short: "A",
-
     label: "Absent",
-
     color: "#FBE5E5",
-
     ink: "#C62828",
   },
-
-  {
-    code: "leave",
-
-    short: "L",
-
-    label: "Leave",
-
-    color: "#FFF0DC",
-
-    ink: "#C34A10",
-  },
-
-  {
-    code: "late",
-
-    short: "LV",
-
-    label: "Late",
-
-    color: "#E5EDFC",
-
-    ink: "#315FA8",
-  },
-
   {
     code: "holiday",
-
     short: "H",
-
     label: "Holiday",
-
     color: "#FBF3CC",
-
     ink: "#8B7000",
   },
 ] as const;
@@ -517,7 +479,7 @@ export default function TeacherAttendanceMarkingScreen() {
       showAlert(
         "Attendance incomplete",
 
-        `${unmarked.length} student(s) still need an attendance status. Choose P, A, L, LV or H for each student.`,
+        `${unmarked.length} student(s) still need an attendance status. Choose P, A or H for each student.`,
 
         "warning",
       );

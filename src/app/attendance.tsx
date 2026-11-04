@@ -98,6 +98,7 @@ export default function AttendanceScreen() {
   const insets = useSafeAreaInsets();
   const [instituteId, setInstituteId] = useState<string | null>(null);
   const [classes, setClasses] = useState<ClassRow[]>([]);
+  const [selectedClassId, setSelectedClassId] = useState<string>("all");
   const [batches, setBatches] = useState<Batch[]>([]);
   const [periods, setPeriods] = useState<Period[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -292,7 +293,19 @@ export default function AttendanceScreen() {
     selectedDate,
   ]);
 
-  const markedCount = scheduled.filter((row) => row.attendanceComplete).length;
+  // Apply the selected class filter without changing the timetable entry data.
+  // Each card still opens attendance for its own class, batch and timetable entry.
+  const filteredScheduled = useMemo(
+    () =>
+      selectedClassId === "all"
+        ? scheduled
+        : scheduled.filter((row) => row.class_id === selectedClassId),
+    [scheduled, selectedClassId],
+  );
+
+  const markedCount = filteredScheduled.filter(
+    (row) => row.attendanceComplete,
+  ).length;
   const calendarCells = useMemo(() => {
     const first = new Date(
       monthCursor.getFullYear(),
@@ -396,17 +409,70 @@ export default function AttendanceScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.filterSection}>
+          <View style={styles.filterHeadingRow}>
+            <Text style={styles.filterTitle}>Filter by class</Text>
+            <Text style={styles.filterCount}>{classes.length} classes</Text>
+          </View>
+          <View style={styles.classFilterGrid}>
+            <Pressable
+              onPress={() => setSelectedClassId("all")}
+              style={[
+                styles.classFilterItem,
+                selectedClassId === "all" && styles.classFilterActive,
+              ]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: selectedClassId === "all" }}
+            >
+              <Text
+                numberOfLines={1}
+                style={[
+                  styles.classFilterText,
+                  selectedClassId === "all" && styles.classFilterTextActive,
+                ]}
+              >
+                All
+              </Text>
+            </Pressable>
+            {classes.map((cls) => {
+              const active = selectedClassId === cls.id;
+              return (
+                <Pressable
+                  key={cls.id}
+                  onPress={() => setSelectedClassId(cls.id)}
+                  style={[
+                    styles.classFilterItem,
+                    active && styles.classFilterActive,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                >
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.classFilterText,
+                      active && styles.classFilterTextActive,
+                    ]}
+                  >
+                    {cls.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
         <View style={styles.summaryCard}>
           <View>
             <Text style={styles.summaryDate}>{dateLabel(chosenDate)}</Text>
             <Text style={styles.summaryCount}>
-              {markedCount} of {scheduled.length} marked
+              {markedCount} of {filteredScheduled.length} marked
             </Text>
           </View>
           <View style={styles.summaryRight}>
             <Text style={styles.summaryPercent}>
-              {scheduled.length
-                ? Math.round((markedCount / scheduled.length) * 100)
+              {filteredScheduled.length
+                ? Math.round((markedCount / filteredScheduled.length) * 100)
                 : 0}
               %
             </Text>
@@ -416,8 +482,8 @@ export default function AttendanceScreen() {
 
         <Text style={styles.sectionTitle}>Classes scheduled</Text>
         <Text style={styles.sectionSubtitle}>
-          {selectedDay} · {scheduled.length} scheduled{" "}
-          {scheduled.length === 1 ? "period" : "periods"}
+          {selectedDay} · {filteredScheduled.length} scheduled{" "}
+          {filteredScheduled.length === 1 ? "period" : "periods"}
         </Text>
 
         {loading ? (
@@ -434,17 +500,17 @@ export default function AttendanceScreen() {
               </View>
             ))}
           </View>
-        ) : scheduled.length === 0 ? (
+        ) : filteredScheduled.length === 0 ? (
           <View style={styles.emptyCard}>
             <Feather name="calendar" size={30} color={MUTED} />
             <Text style={styles.emptyTitle}>No classes scheduled</Text>
             <Text style={styles.emptyText}>
-              There are no timetable entries for {selectedDay}. Choose another
-              date to view its classes.
+              There are no timetable entries for {selectedDay} in the selected
+              class. Choose another date to view its classes.
             </Text>
           </View>
         ) : (
-          scheduled.map((row) => (
+          filteredScheduled.map((row) => (
             <Pressable
               key={row.id}
               style={styles.classCard}
@@ -665,6 +731,49 @@ const styles = StyleSheet.create({
     paddingBottom: 110,
     gap: 12,
   },
+  filterSection: {
+    backgroundColor: WHITE,
+    borderRadius: 20,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
+    gap: 11,
+  },
+  filterHeadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  filterTitle: { color: NAVY, fontSize: 15, fontWeight: "800" },
+  filterCount: { color: MUTED, fontSize: 12, fontWeight: "600" },
+  classFilterGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  classFilterItem: {
+    width: "18.1%",
+    minHeight: 38,
+    paddingHorizontal: 5,
+    paddingVertical: 8,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: "#FAF9FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  classFilterActive: {
+    backgroundColor: PURPLE,
+    borderColor: PURPLE,
+  },
+  classFilterText: {
+    color: "#5B556B",
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  classFilterTextActive: { color: WHITE },
   summaryCard: {
     backgroundColor: WHITE,
     borderRadius: 24,

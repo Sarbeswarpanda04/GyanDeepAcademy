@@ -10,18 +10,20 @@ import {
   Pressable,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "expo-router";
 import { supabase } from "../lib/supabase";
 
-const NAVY = "#172B4D";
-const BG = "#F4F7FB";
-const MUTED = "#77869A";
-const BORDER = "#E5EAF1";
+const NAVY = "#44109D";
+const BG = "#F6F3FC";
+const MUTED = "#817A91";
+const BORDER = "#EAE4F4";
 const WHITE = "#FFFFFF";
-const GREEN = "#15966A";
-const RED = "#D9535D";
-const BLUE = "#4263EB";
-const PURPLE = "#8B5CF6";
+const GREEN = "#17856B";
+const RED = "#D95362";
+const BLUE = "#611CD0";
+const PURPLE = "#7A3FE0";
+const GRADIENT = ["#611CD0", "#44109D", "#4C02F7"] as const;
 
 type FeePayment = {
   id: string;
@@ -323,7 +325,12 @@ export default function WalletScreen() {
           />
         }
       >
-        <View style={styles.header}>
+        <LinearGradient
+        colors={GRADIENT}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
+      >
           <View style={styles.headerTop}>
             <View style={styles.headerIcon}>
               <Feather name="briefcase" size={21} color={WHITE} />
@@ -347,7 +354,12 @@ export default function WalletScreen() {
               <Feather name="refresh-cw" size={18} color={WHITE} />
             </Pressable>
           </View>
-          <View style={styles.balanceCard}>
+          <LinearGradient
+            colors={["rgba(255,255,255,0.19)", "rgba(255,255,255,0.08)"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.balanceCard}
+          >
             <View style={styles.balanceTopRow}>
               <View>
                 <Text style={styles.balanceLabel}>TOTAL WALLET BALANCE</Text>
@@ -386,8 +398,8 @@ export default function WalletScreen() {
                 </Text>
               </View>
             </View>
-          </View>
-        </View>
+          </LinearGradient>
+        </LinearGradient>
 
         <View style={styles.body}>
           {errorMessage ? (
@@ -622,25 +634,25 @@ export default function WalletScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: BG },
-  scrollContent: { paddingBottom: 34 },
+  scrollContent: { paddingBottom: 38 },
   header: {
-    backgroundColor: NAVY,
-    paddingTop: 18,
+    paddingTop: 20,
     paddingHorizontal: 18,
-    paddingBottom: 28,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
+    paddingBottom: 29,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    overflow: "hidden",
   },
   headerTop: { flexDirection: "row", alignItems: "center", gap: 12 },
   headerIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 15,
+    width: 48,
+    height: 48,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.13)",
+    backgroundColor: "rgba(255,255,255,0.16)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.15)",
+    borderColor: "rgba(255,255,255,0.22)",
   },
   headerCopy: { flex: 1 },
   eyebrow: {
@@ -662,10 +674,15 @@ const styles = StyleSheet.create({
   balanceCard: {
     marginTop: 23,
     padding: 19,
-    borderRadius: 23,
-    backgroundColor: "#243D5D",
+    borderRadius: 24,
+    backgroundColor: "rgba(255,255,255,0.12)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: "rgba(255,255,255,0.24)",
+    shadowColor: "#26005F",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    elevation: 7,
   },
   balanceTopRow: {
     flexDirection: "row",
@@ -687,9 +704,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 9,
     paddingVertical: 6,
-    backgroundColor: "rgba(21,150,106,0.18)",
+    backgroundColor: "rgba(255,255,255,0.16)",
   },
-  walletBadgeText: { color: "#B9F6D8", fontSize: 10, fontWeight: "700" },
+  walletBadgeText: { color: "#F0E7FF", fontSize: 10, fontWeight: "700" },
   balanceAmount: {
     color: WHITE,
     fontSize: 34,
@@ -754,9 +771,9 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 12,
-    backgroundColor: WHITE,
+    backgroundColor: "#F0E8FF",
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E4D8FA",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -783,11 +800,16 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     minWidth: "46%",
     backgroundColor: WHITE,
-    borderRadius: 18,
-    padding: 14,
+    borderRadius: 20,
+    padding: 15,
     borderWidth: 1,
     borderColor: BORDER,
-    minHeight: 143,
+    minHeight: 145,
+    shadowColor: "#4B238A",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.045,
+    shadowRadius: 10,
+    elevation: 2,
   },
   metricIcon: {
     width: 37,
@@ -802,11 +824,16 @@ const styles = StyleSheet.create({
   metricCaption: { color: "#9AA6B6", fontSize: 10, marginTop: 5 },
   breakdownCard: {
     backgroundColor: WHITE,
-    borderRadius: 21,
+    borderRadius: 22,
     padding: 17,
     marginTop: 22,
     borderWidth: 1,
     borderColor: BORDER,
+    shadowColor: "#4B238A",
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
   },
   breakdownTitleRow: {
     flexDirection: "row",
@@ -818,7 +845,7 @@ const styles = StyleSheet.create({
     width: 39,
     height: 39,
     borderRadius: 13,
-    backgroundColor: "#EEF2F8",
+    backgroundColor: "#F0E8FF",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -851,7 +878,9 @@ const styles = StyleSheet.create({
     marginTop: 10,
     padding: 13,
     borderRadius: 14,
-    backgroundColor: "#F5F8FC",
+    backgroundColor: "#F5F0FF",
+    borderWidth: 1,
+    borderColor: "#EDE4FB",
   },
   netLabel: { color: NAVY, fontSize: 13, fontWeight: "800" },
   netHint: { color: MUTED, fontSize: 10, marginTop: 4, maxWidth: 190 },
@@ -867,7 +896,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 12,
-    backgroundColor: "#E8EDF5",
+    backgroundColor: "#F0E8FF",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -877,6 +906,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderWidth: 1,
     borderColor: BORDER,
+    shadowColor: "#4B238A",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.035,
+    shadowRadius: 10,
+    elevation: 1,
   },
   activityRow: {
     flexDirection: "row",

@@ -1,3 +1,4 @@
+
 import React, { useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -29,6 +30,7 @@ const BG = "#F3F3FF";
 const WHITE = "#FFFFFF";
 const MUTED = "#718096";
 const BORDER = "#E8E3F5";
+
 const APP_LOGO: ImageSourcePropType = require("../../../assets/images/icon.png");
 
 type AlertState = {
@@ -59,7 +61,79 @@ export default function TeacherLoginScreen() {
     message: string,
     type: AppAlertType = "error",
   ) => {
-    setAlert({ visible: true, title, message, type });
+    setAlert({
+      visible: true,
+      title,
+      message,
+      type,
+    });
+  };
+
+  /**
+   * Register the teacher's device for push notifications.
+   * This runs independently so a notification issue cannot block login.
+   */
+  const registerTeacherPush = async (userId: string) => {
+    try {
+      const isExpoGo =
+        Constants.executionEnvironment ===
+          ExecutionEnvironment.StoreClient ||
+        Constants.appOwnership === "expo";
+
+      if (isExpoGo) {
+        console.info(
+          "[teacher-login] Push notifications require a development or production build.",
+        );
+        return;
+      }
+
+      // Find the authenticated teacher's active institute membership.
+      const { data: memberships, error: membershipError } = await supabase
+        .from("institute_team_members")
+        .select("id, institute_id")
+        .eq("user_id", userId)
+        .eq("role", "teacher")
+        .eq("is_active", true)
+        .limit(2);
+
+      if (membershipError) {
+        throw membershipError;
+      }
+
+      if (!memberships || memberships.length === 0) {
+        throw new Error("No active teacher institute membership was found.");
+      }
+
+      // Do not guess which institute to use if the teacher belongs to multiple.
+      if (memberships.length > 1) {
+        console.warn(
+          "[teacher-login] Multiple active institute memberships found. Push registration skipped.",
+        );
+        return;
+      }
+
+      const instituteId = memberships[0].institute_id;
+
+      if (!instituteId) {
+        throw new Error("Institute ID is missing from teacher membership.");
+      }
+
+      const { registerTeacherPushNotifications } =
+        await import("../../lib/pushNotifications");
+
+      const registered =
+        await registerTeacherPushNotifications(instituteId);
+
+      console.info(
+        "[teacher-login] Push registration:",
+        registered ? "SUCCESS" : "NOT REGISTERED",
+      );
+    } catch (error) {
+      console.warn(
+        "[teacher-login] Push registration failed:",
+        error,
+      );
+    }
   };
 
   const login = async () => {
@@ -77,13 +151,18 @@ export default function TeacherLoginScreen() {
     }
 
     if (!/^\d{4}$/.test(pin)) {
-      showAlert("Invalid PIN", "Enter your 4-digit login PIN.", "warning");
+      showAlert(
+        "Invalid PIN",
+        "Enter your 4-digit login PIN.",
+        "warning",
+      );
       return;
     }
 
     setLoading(true);
 
     try {
+      // Step 1: Verify teacher mobile number and PIN.
       const { data, error } = await supabase.functions.invoke(
         "teacher-pin-login",
         {
@@ -95,29 +174,34 @@ export default function TeacherLoginScreen() {
       );
 
       if (error) {
-        let message = error.message || "Unable to contact the login service.";
+        let message =
+          error.message || "Unable to contact the login service.";
 
-        // Extract the server's error message when available.
         const context = (error as { context?: Response }).context;
 
         if (context && typeof context.clone === "function") {
           try {
             const response = context.clone();
-            const contentType = response.headers.get("content-type") ?? "";
+            const contentType =
+              response.headers.get("content-type") ?? "";
 
             if (contentType.includes("application/json")) {
               const body = await response.json();
+
               message =
                 body?.message ??
                 body?.error ??
                 body?.error_description ??
                 message;
             } else {
-              const text = (await response.text()).trim();
-              if (text) message = text;
+              const responseText = (await response.text()).trim();
+
+              if (responseText) {
+                message = responseText;
+              }
             }
           } catch {
-            // Keep the original error message if the response cannot be read.
+            // Keep the original error message.
           }
         }
 
@@ -125,9 +209,12 @@ export default function TeacherLoginScreen() {
       }
 
       if (!data?.success) {
-        throw new Error(data?.message ?? "Incorrect mobile number or PIN.");
+        throw new Error(
+          data?.message ?? "Incorrect mobile number or PIN.",
+        );
       }
 
+      // Step 2: Validate the returned Supabase session.
       const accessToken = data?.session?.access_token;
       const refreshToken = data?.session?.refresh_token;
 
@@ -137,7 +224,11 @@ export default function TeacherLoginScreen() {
         );
       }
 
-      const { error: sessionError } = await supabase.auth.setSession({
+      // Step 3: Establish the authenticated Supabase session.
+      const {
+        data: sessionData,
+        error: sessionError,
+      } = await supabase.auth.setSession({
         access_token: accessToken,
         refresh_token: refreshToken,
       });
@@ -146,30 +237,22 @@ export default function TeacherLoginScreen() {
         throw sessionError;
       }
 
-      // Expo Go on Android does not include the native remote-notification module.
-      // Load pushNotifications only in a native development/production build so its
-      // expo-notifications import cannot crash this login route in Expo Go.
-      if (Constants.executionEnvironment !== ExecutionEnvironment.StoreClient) {
-        void import("../../lib/pushNotifications")
-          .then(({ registerTeacherPushNotifications }) =>
-            registerTeacherPushNotifications(),
-          )
-          .catch((notificationError) => {
-            console.warn(
-              "[teacher-login] Push notification registration skipped:",
-              notificationError,
-            );
-          });
-      } else {
-        console.info(
-          "[teacher-login] Remote push notifications require a development build; skipping in Expo Go.",
+      const userId = sessionData.session?.user?.id;
+
+      if (!userId) {
+        throw new Error(
+          "Unable to retrieve the authenticated teacher ID.",
         );
       }
 
-      // Open the dashboard only after Supabase accepts the session.
+      // Step 4: Navigate to the dashboard after successful authentication.
       router.replace("/teacher/teacher-dashboard" as never);
+
+      // Step 5: Register push notifications in the background.
+      // Push registration failure must not interrupt the login.
+      void registerTeacherPush(userId);
     } catch (error: unknown) {
-      console.error("[teacher-login] failed:", error);
+      console.error("[teacher-login] Login failed:", error);
 
       showAlert(
         "Login failed",
@@ -185,20 +268,27 @@ export default function TeacherLoginScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={PURPLE_DARK} />
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor={PURPLE_DARK}
+      />
+
       <LinearGradient
         colors={[PURPLE, PURPLE_DARK, PURPLE_BRIGHT]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
+
       <View pointerEvents="none" style={styles.orbTop} />
       <View pointerEvents="none" style={styles.orbBottom} />
 
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
+        keyboardVerticalOffset={
+          Platform.OS === "ios" ? insets.top : 0
+        }
       >
         <ScrollView
           contentContainerStyle={[
@@ -220,8 +310,13 @@ export default function TeacherLoginScreen() {
               accessibilityLabel="Go back"
               hitSlop={8}
             >
-              <Feather name="chevron-left" size={26} color={WHITE} />
+              <Feather
+                name="chevron-left"
+                size={26}
+                color={WHITE}
+              />
             </Pressable>
+
             <Text style={styles.topTitle}>Teacher Login</Text>
             <View style={styles.topBarSpacer} />
           </View>
@@ -243,20 +338,37 @@ export default function TeacherLoginScreen() {
                   />
                 </LinearGradient>
               </View>
-              <Text style={styles.brandName}>GyanDeep Academy</Text>
-              <Text style={styles.brandTagline}>LEARN TODAY. LEAD TOMORROW.</Text>
+
+              <Text style={styles.brandName}>
+                GyanDeep Academy
+              </Text>
+
+              <Text style={styles.brandTagline}>
+                LEARN TODAY. LEAD TOMORROW.
+              </Text>
+
               <View style={styles.brandAccent} />
-              <Text style={styles.heading}>Welcome back</Text>
+
+              <Text style={styles.heading}>
+                Welcome back
+              </Text>
+
               <Text style={styles.subtitle}>
-                Sign in with the mobile number and 4-digit PIN provided by your institute.
+                Sign in with the mobile number and 4-digit PIN
+                provided by your institute.
               </Text>
             </View>
 
             <View style={styles.formCard}>
-              <Text style={styles.label}>Registered mobile number</Text>
+              <Text style={styles.label}>
+                Registered mobile number
+              </Text>
+
               <View style={styles.phoneInputWrap}>
                 <Text style={styles.countryText}>+91</Text>
+
                 <View style={styles.inputDivider} />
+
                 <TextInput
                   style={styles.phoneInput}
                   value={phone}
@@ -273,14 +385,24 @@ export default function TeacherLoginScreen() {
                   returnKeyType="next"
                   selectionColor={PURPLE}
                 />
+
                 {phone.length === 10 ? (
-                  <Feather name="check-circle" size={18} color="#16A34A" />
+                  <Feather
+                    name="check-circle"
+                    size={18}
+                    color="#16A34A"
+                  />
                 ) : null}
               </View>
 
               <View style={styles.pinLabelRow}>
-                <Text style={styles.label}>4-digit login PIN</Text>
-                <Text style={styles.pinHint}>4 DIGITS</Text>
+                <Text style={styles.label}>
+                  4-digit login PIN
+                </Text>
+
+                <Text style={styles.pinHint}>
+                  4 DIGITS
+                </Text>
               </View>
 
               <View style={styles.pinSection}>
@@ -294,24 +416,32 @@ export default function TeacherLoginScreen() {
                   {[0, 1, 2, 3].map((index) => {
                     const digit = pin[index];
                     const active = pin.length === index;
+
                     return (
                       <View
                         key={index}
                         style={[
                           styles.pinBox,
                           active && styles.pinBoxActive,
-                          digit !== undefined && styles.pinBoxFilled,
+                          digit !== undefined &&
+                            styles.pinBoxFilled,
                         ]}
                       >
                         <Text style={styles.pinDigit}>
-                          {digit === undefined ? "" : showPin ? digit : "•"}
+                          {digit === undefined
+                            ? ""
+                            : showPin
+                              ? digit
+                              : "•"}
                         </Text>
+
                         {active && digit === undefined ? (
                           <View style={styles.pinCursor} />
                         ) : null}
                       </View>
                     );
                   })}
+
                   <TextInput
                     ref={pinInputRef}
                     value={pin}
@@ -333,10 +463,14 @@ export default function TeacherLoginScreen() {
                 </Pressable>
 
                 <Pressable
-                  onPress={() => setShowPin((current) => !current)}
+                  onPress={() =>
+                    setShowPin((current) => !current)
+                  }
                   hitSlop={10}
                   accessibilityRole="button"
-                  accessibilityLabel={showPin ? "Hide PIN" : "Show PIN"}
+                  accessibilityLabel={
+                    showPin ? "Hide PIN" : "Show PIN"
+                  }
                   style={styles.showPinButton}
                 >
                   <Feather
@@ -344,6 +478,7 @@ export default function TeacherLoginScreen() {
                     size={18}
                     color={PURPLE}
                   />
+
                   <Text style={styles.showPinText}>
                     {showPin ? "Hide PIN" : "Show PIN"}
                   </Text>
@@ -351,13 +486,20 @@ export default function TeacherLoginScreen() {
               </View>
 
               <Pressable
-                style={[styles.loginButton, loading && styles.disabled]}
+                style={[
+                  styles.loginButton,
+                  loading && styles.disabled,
+                ]}
                 onPress={login}
                 disabled={loading}
                 accessibilityRole="button"
               >
                 <LinearGradient
-                  colors={[PURPLE, PURPLE_DARK, PURPLE_BRIGHT]}
+                  colors={[
+                    PURPLE,
+                    PURPLE_DARK,
+                    PURPLE_BRIGHT,
+                  ]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.loginGradient}
@@ -366,23 +508,41 @@ export default function TeacherLoginScreen() {
                     <ActivityIndicator color={WHITE} />
                   ) : (
                     <>
-                      <Text style={styles.loginText}>Sign in</Text>
-                      <Feather name="arrow-right" size={19} color={WHITE} />
+                      <Text style={styles.loginText}>
+                        Sign in
+                      </Text>
+
+                      <Feather
+                        name="arrow-right"
+                        size={19}
+                        color={WHITE}
+                      />
                     </>
                   )}
                 </LinearGradient>
               </Pressable>
 
               <View style={styles.secureNote}>
-                <Feather name="check-circle" size={14} color={PURPLE} />
-                <Text style={styles.secureText}>Secure teacher access</Text>
+                <Feather
+                  name="check-circle"
+                  size={14}
+                  color={PURPLE}
+                />
+
+                <Text style={styles.secureText}>
+                  Secure teacher access
+                </Text>
               </View>
+
               <Text style={styles.helpText}>
                 Forgot your PIN? Contact your institute owner to reset it.
               </Text>
             </View>
           </View>
-          <Text style={styles.footerText}>YOUR JOURNEY. YOUR POTENTIAL.</Text>
+
+          <Text style={styles.footerText}>
+            YOUR JOURNEY. YOUR POTENTIAL.
+          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -404,134 +564,355 @@ export default function TeacherLoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  screen: { flex: 1, backgroundColor: PURPLE_DARK },
+  flex: {
+    flex: 1,
+  },
+
+  screen: {
+    flex: 1,
+    backgroundColor: PURPLE_DARK,
+  },
+
   orbTop: {
-    position: "absolute", width: 250, height: 250, borderRadius: 125,
-    top: -125, right: -95, backgroundColor: "rgba(255,255,255,0.08)",
+    position: "absolute",
+    width: 250,
+    height: 250,
+    borderRadius: 125,
+    top: -125,
+    right: -95,
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
+
   orbBottom: {
-    position: "absolute", width: 200, height: 200, borderRadius: 100,
-    bottom: -90, left: -95, backgroundColor: "rgba(255,255,255,0.07)",
+    position: "absolute",
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    bottom: -90,
+    left: -95,
+    backgroundColor: "rgba(255,255,255,0.07)",
   },
+
   scrollContent: {
-    flexGrow: 1, justifyContent: "center", paddingHorizontal: 22,
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingHorizontal: 22,
   },
+
   topBar: {
-    width: "100%", maxWidth: 460, alignSelf: "center",
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    width: "100%",
+    maxWidth: 460,
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 8,
   },
-  backButton: { width: 40, height: 42, justifyContent: "center" },
-  topTitle: { color: WHITE, fontSize: 16, fontWeight: "800", letterSpacing: 0.2 },
-  topBarSpacer: { width: 40 },
-  content: { width: "100%", maxWidth: 460, alignSelf: "center", paddingBottom: 10 },
-  brandBlock: { alignItems: "center", marginBottom: 20 },
+
+  backButton: {
+    width: 40,
+    height: 42,
+    justifyContent: "center",
+  },
+
+  topTitle: {
+    color: WHITE,
+    fontSize: 16,
+    fontWeight: "800",
+    letterSpacing: 0.2,
+  },
+
+  topBarSpacer: {
+    width: 40,
+  },
+
+  content: {
+    width: "100%",
+    maxWidth: 460,
+    alignSelf: "center",
+    paddingBottom: 10,
+  },
+
+  brandBlock: {
+    alignItems: "center",
+    marginBottom: 20,
+  },
+
   logoGlow: {
-    width: 104, height: 104, borderRadius: 32, padding: 4, marginBottom: 12,
+    width: 104,
+    height: 104,
+    borderRadius: 32,
+    padding: 4,
+    marginBottom: 12,
     backgroundColor: "rgba(255,255,255,0.22)",
-    shadowColor: "#180044", shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.35, shadowRadius: 18, elevation: 12,
+    shadowColor: "#180044",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    elevation: 12,
   },
+
   logoSurface: {
-    flex: 1, borderRadius: 28, padding: 10, alignItems: "center",
-    justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.85)",
+    flex: 1,
+    borderRadius: 28,
+    padding: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.85)",
   },
-  logoImage: { width: "100%", height: "100%" },
+
+  logoImage: {
+    width: "100%",
+    height: "100%",
+  },
+
   brandName: {
-    color: WHITE, fontSize: 25, fontWeight: "900", letterSpacing: -0.8,
-    textAlign: "center", textShadowColor: "rgba(20,0,60,0.3)",
-    textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 6,
+    color: WHITE,
+    fontSize: 25,
+    fontWeight: "900",
+    letterSpacing: -0.8,
+    textAlign: "center",
+    textShadowColor: "rgba(20,0,60,0.3)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
   },
+
   brandTagline: {
-    color: "#E7DAFF", fontSize: 8, fontWeight: "800", letterSpacing: 2,
-    textAlign: "center", marginTop: 6,
+    color: "#E7DAFF",
+    fontSize: 8,
+    fontWeight: "800",
+    letterSpacing: 2,
+    textAlign: "center",
+    marginTop: 6,
   },
+
   brandAccent: {
-    width: 38, height: 3, borderRadius: 3, backgroundColor: "#D9C4FF",
-    marginTop: 12, marginBottom: 12,
+    width: 38,
+    height: 3,
+    borderRadius: 3,
+    backgroundColor: "#D9C4FF",
+    marginTop: 12,
+    marginBottom: 12,
   },
-  heading: { fontSize: 25, fontWeight: "900", color: WHITE, textAlign: "center" },
+
+  heading: {
+    fontSize: 25,
+    fontWeight: "900",
+    color: WHITE,
+    textAlign: "center",
+  },
+
   subtitle: {
-    color: "#E4D8FA", fontSize: 12, lineHeight: 18, textAlign: "center",
-    marginTop: 6, paddingHorizontal: 8, maxWidth: 330,
+    color: "#E4D8FA",
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "center",
+    marginTop: 6,
+    paddingHorizontal: 8,
+    maxWidth: 330,
   },
+
   formCard: {
-    backgroundColor: WHITE, borderRadius: 24, padding: 20,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.8)",
-    shadowColor: "#190047", shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.18, shadowRadius: 20, elevation: 8,
+    backgroundColor: WHITE,
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.8)",
+    shadowColor: "#190047",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    elevation: 8,
   },
-  label: { color: NAVY, fontSize: 12, fontWeight: "800" },
+
+  label: {
+    color: NAVY,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+
   phoneInputWrap: {
-    minHeight: 54, borderRadius: 14, borderWidth: 1.3, borderColor: BORDER,
-    backgroundColor: "#FBFAFF", paddingHorizontal: 13, flexDirection: "row",
-    alignItems: "center", gap: 10, marginTop: 9,
+    minHeight: 54,
+    borderRadius: 14,
+    borderWidth: 1.3,
+    borderColor: BORDER,
+    backgroundColor: "#FBFAFF",
+    paddingHorizontal: 13,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 9,
   },
-  countryText: { color: PURPLE, fontSize: 14, fontWeight: "900" },
-  inputDivider: { height: 24, width: 1, backgroundColor: BORDER },
+
+  countryText: {
+    color: PURPLE,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+
+  inputDivider: {
+    height: 24,
+    width: 1,
+    backgroundColor: BORDER,
+  },
+
   phoneInput: {
-    flex: 1, minWidth: 0, color: NAVY, fontSize: 15, paddingVertical: 12,
+    flex: 1,
+    minWidth: 0,
+    color: NAVY,
+    fontSize: 15,
+    paddingVertical: 12,
   },
+
   pinLabelRow: {
-    marginTop: 19, flexDirection: "row", alignItems: "center",
+    marginTop: 19,
+    flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
   },
-  pinHint: { color: "#9B8AB8", fontSize: 9, fontWeight: "900", letterSpacing: 1.2 },
-  pinSection: { marginTop: 12 },
+
+  pinHint: {
+    color: "#9B8AB8",
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 1.2,
+  },
+
+  pinSection: {
+    marginTop: 12,
+  },
+
   pinBoxes: {
-    flexDirection: "row", justifyContent: "space-between", gap: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 10,
     position: "relative",
   },
+
   pinBox: {
-    flex: 1, height: 64, borderRadius: 15, borderWidth: 1.5,
-    borderColor: "#E4DDF1", backgroundColor: "#FBFAFF",
-    alignItems: "center", justifyContent: "center",
+    flex: 1,
+    height: 64,
+    borderRadius: 15,
+    borderWidth: 1.5,
+    borderColor: "#E4DDF1",
+    backgroundColor: "#FBFAFF",
+    alignItems: "center",
+    justifyContent: "center",
   },
+
   pinBoxActive: {
-    borderColor: PURPLE, backgroundColor: "#F7F1FF",
-    shadowColor: PURPLE, shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.12, shadowRadius: 6, elevation: 2,
+    borderColor: PURPLE,
+    backgroundColor: "#F7F1FF",
+    shadowColor: PURPLE,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  pinBoxFilled: { borderColor: "#C8B4F1", backgroundColor: "#F7F1FF" },
+
+  pinBoxFilled: {
+    borderColor: "#C8B4F1",
+    backgroundColor: "#F7F1FF",
+  },
+
   pinDigit: {
-    color: PURPLE_DARK, fontSize: 29, lineHeight: 36,
-    fontWeight: "900", textAlign: "center",
+    color: PURPLE_DARK,
+    fontSize: 29,
+    lineHeight: 36,
+    fontWeight: "900",
+    textAlign: "center",
   },
+
   pinCursor: {
-    position: "absolute", height: 23, width: 2, borderRadius: 2,
+    position: "absolute",
+    height: 23,
+    width: 2,
+    borderRadius: 2,
     backgroundColor: PURPLE,
   },
+
   pinHiddenInput: {
-    ...StyleSheet.absoluteFill, opacity: 0.02, color: "transparent",
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.02,
+    color: "transparent",
     backgroundColor: "transparent",
   },
+
   showPinButton: {
-    alignSelf: "center", flexDirection: "row", alignItems: "center",
-    justifyContent: "center", gap: 6, paddingVertical: 11,
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 11,
   },
-  showPinText: { color: PURPLE, fontSize: 11, fontWeight: "800" },
+
+  showPinText: {
+    color: PURPLE,
+    fontSize: 11,
+    fontWeight: "800",
+  },
+
   loginButton: {
-    height: 53, borderRadius: 15, overflow: "hidden", marginTop: 9,
-    shadowColor: PURPLE, shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.2, shadowRadius: 9, elevation: 4,
+    height: 53,
+    borderRadius: 15,
+    overflow: "hidden",
+    marginTop: 9,
+    shadowColor: PURPLE,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.2,
+    shadowRadius: 9,
+    elevation: 4,
   },
+
   loginGradient: {
-    flex: 1, flexDirection: "row", alignItems: "center",
-    justifyContent: "center", gap: 10,
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
   },
-  disabled: { opacity: 0.65 },
-  loginText: { color: WHITE, fontSize: 15, fontWeight: "900", letterSpacing: 0.3 },
+
+  disabled: {
+    opacity: 0.65,
+  },
+
+  loginText: {
+    color: WHITE,
+    fontSize: 15,
+    fontWeight: "900",
+    letterSpacing: 0.3,
+  },
+
   secureNote: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 6, marginTop: 13,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 13,
   },
-  secureText: { color: MUTED, fontSize: 10, fontWeight: "600" },
+
+  secureText: {
+    color: MUTED,
+    fontSize: 10,
+    fontWeight: "600",
+  },
+
   helpText: {
-    color: MUTED, fontSize: 11, lineHeight: 16, textAlign: "center", marginTop: 11,
+    color: MUTED,
+    fontSize: 11,
+    lineHeight: 16,
+    textAlign: "center",
+    marginTop: 11,
   },
+
   footerText: {
-    color: "#E8DFFF", fontSize: 9, fontWeight: "800", letterSpacing: 1.6,
-    textAlign: "center", marginTop: 12,
+    color: "#E8DFFF",
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1.6,
+    textAlign: "center",
+    marginTop: 12,
   },
 });

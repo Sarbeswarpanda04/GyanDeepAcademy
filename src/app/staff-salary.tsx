@@ -13,19 +13,23 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect } from "expo-router";
 import { supabase } from "../lib/supabase";
 import AppAlert, { type AppAlertType } from "../components/AppAlert";
 
-const NAVY = "#202F42";
-const BG = "#F1F5F8";
-const MUTED = "#78909F";
-const BORDER = "#DDE5EC";
+const NAVY = "#351078";
+const BG = "#F5F2FF";
+const MUTED = "#82779A";
+const BORDER = "#E9E2F7";
 const WHITE = "#FFFFFF";
-const GREEN = "#397D40";
-const RED = "#C94343";
+const GREEN = "#16845D";
+const RED = "#D34B63";
 const AMBER = "#A66A13";
+const PURPLE = "#611CD0";
+const PURPLE_DARK = "#44109D";
+const PURPLE_BRIGHT = "#4C02F7";
 
 type Staff = {
   id: string;
@@ -561,7 +565,12 @@ function StaffSalaryScreen() {
   return (
     <View style={styles.screen}>
       <StatusBar barStyle="light-content" backgroundColor={NAVY} />
-      <View style={styles.top}>
+      <LinearGradient
+        colors={[PURPLE, PURPLE_DARK, PURPLE_BRIGHT]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.top}
+      >
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>Staff Salary</Text>
@@ -585,7 +594,7 @@ function StaffSalaryScreen() {
             <Feather name="chevron-right" size={22} color={WHITE} />
           </Pressable>
         </View>
-      </View>
+      </LinearGradient>
 
       <View style={styles.body}>
         <View style={styles.summaryGrid}>
@@ -620,7 +629,7 @@ function StaffSalaryScreen() {
 
         {loading ? (
           <View style={styles.center}>
-            <ActivityIndicator size="large" color={NAVY} />
+            <ActivityIndicator size="large" color={PURPLE} />
             <Text style={styles.muted}>Loading salary records…</Text>
           </View>
         ) : filteredRows.length === 0 ? (
@@ -949,34 +958,41 @@ export default StaffSalaryScreen;
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: BG },
   top: {
-    backgroundColor: NAVY,
     paddingTop: 18,
     paddingHorizontal: 18,
-    paddingBottom: 14,
+    paddingBottom: 17,
+    borderBottomLeftRadius: 25,
+    borderBottomRightRadius: 25,
+    overflow: "hidden",
   },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    paddingVertical: 12,
+    paddingTop: 7,
+    paddingBottom: 16,
   },
-  title: { color: WHITE, fontSize: 27, fontWeight: "800" },
-  subtitle: { color: "#C0CED8", fontSize: 12, marginTop: 5, lineHeight: 18 },
+  title: { color: WHITE, fontSize: 27, fontWeight: "900", letterSpacing: -0.6 },
+  subtitle: { color: "#E8DDFF", fontSize: 12, marginTop: 5, lineHeight: 18 },
   headerIcon: {
     width: 48,
     height: 48,
     borderRadius: 16,
-    backgroundColor: "#35495E",
+    backgroundColor: "rgba(255,255,255,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
     alignItems: "center",
     justifyContent: "center",
   },
   monthSelector: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#293B50",
-    borderRadius: 16,
+    backgroundColor: "rgba(35,10,91,0.28)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    borderRadius: 17,
     padding: 6,
-    marginTop: 8,
+    marginTop: 2,
   },
   monthArrow: {
     width: 42,
@@ -992,10 +1008,15 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     backgroundColor: WHITE,
-    borderRadius: 14,
-    padding: 11,
+    borderRadius: 16,
+    padding: 12,
     borderWidth: 1,
     borderColor: BORDER,
+    shadowColor: "#351078",
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   summaryLabel: { color: MUTED, fontSize: 10, fontWeight: "700" },
   summaryValue: { color: NAVY, fontSize: 15, fontWeight: "900", marginTop: 6 },
@@ -1003,12 +1024,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    borderRadius: 13,
+    borderRadius: 15,
     borderWidth: 1,
     borderColor: BORDER,
     backgroundColor: WHITE,
-    paddingHorizontal: 12,
-    marginBottom: 12,
+    paddingHorizontal: 13,
+    marginBottom: 14,
+    shadowColor: "#351078",
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 1,
   },
   searchInput: { flex: 1, height: 44, color: NAVY, fontSize: 13 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
@@ -1028,18 +1054,23 @@ const styles = StyleSheet.create({
   emptyTitle: { color: NAVY, fontSize: 17, fontWeight: "800", marginTop: 14 },
   staffCard: {
     backgroundColor: WHITE,
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: BORDER,
-    padding: 14,
-    marginBottom: 12,
+    padding: 15,
+    marginBottom: 14,
+    shadowColor: "#351078",
+    shadowOpacity: 0.055,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 2,
   },
   staffTop: { flexDirection: "row", alignItems: "center", gap: 10 },
   avatar: {
     width: 42,
     height: 42,
     borderRadius: 13,
-    backgroundColor: "#E9EFF5",
+    backgroundColor: "#F0E8FF",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1052,7 +1083,7 @@ const styles = StyleSheet.create({
   },
   statusBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6 },
   metrics: { flexDirection: "row", gap: 8, marginTop: 14, marginBottom: 12 },
-  metric: { flex: 1, backgroundColor: "#F6F8FA", borderRadius: 10, padding: 9 },
+  metric: { flex: 1, backgroundColor: "#F8F5FF", borderRadius: 12, padding: 10, borderWidth: 1, borderColor: "#F0E9FC" },
   metricLabel: { color: MUTED, fontSize: 10 },
   metricValue: { color: NAVY, fontSize: 15, fontWeight: "800", marginTop: 4 },
   salaryLine: {
@@ -1113,8 +1144,10 @@ const styles = StyleSheet.create({
   proofButtonText: { color: NAVY, fontSize: 10, fontWeight: "800" },
   proofUnavailable: { color: MUTED, fontSize: 9 },
   proofSection: {
-    backgroundColor: "#EAF0F5",
-    borderRadius: 12,
+    backgroundColor: "#F8F5FF",
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "#F0E9FC",
     padding: 11,
     marginBottom: 10,
   },
@@ -1156,22 +1189,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: NAVY,
-    borderRadius: 12,
-    paddingVertical: 13,
+    backgroundColor: PURPLE,
+    borderRadius: 13,
+    paddingVertical: 14,
     paddingHorizontal: 12,
     marginTop: 10,
   },
   payButtonText: { color: WHITE, fontSize: 12, fontWeight: "800" },
   formOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: "rgba(10,24,42,0.5)",
+    backgroundColor: "rgba(25,10,55,0.56)",
     justifyContent: "flex-end",
     zIndex: 10,
   },
   formCard: {
     backgroundColor: BG,
-    borderTopLeftRadius: 25,
+    borderTopLeftRadius: 27,
     borderTopRightRadius: 25,
     paddingHorizontal: 18,
     paddingTop: 10,
@@ -1183,7 +1216,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 5,
     borderRadius: 5,
-    backgroundColor: "#CBD3E0",
+    backgroundColor: "#D8CBEF",
     marginBottom: 15,
   },
   formHeader: {
@@ -1205,7 +1238,7 @@ const styles = StyleSheet.create({
     backgroundColor: WHITE,
     borderWidth: 1,
     borderColor: BORDER,
-    borderRadius: 11,
+    borderRadius: 13,
     minHeight: 45,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -1223,6 +1256,6 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     backgroundColor: WHITE,
   },
-  methodActive: { backgroundColor: NAVY, borderColor: NAVY },
+  methodActive: { backgroundColor: PURPLE, borderColor: PURPLE },
   methodText: { color: NAVY, fontSize: 11, fontWeight: "800" },
 });

@@ -252,6 +252,13 @@ const INSTITUTE_ACTIONS: Action[] = [
     color: C.blueLight,
     iconColor: C.blue,
   },
+  {
+  title: "WhatsApp Groups",
+  icon: "message-circle",
+  route: "/whatsapp-groups",
+  color: "#E5F7EF",
+  iconColor: "#168568",
+},
 ];
 
 function formatRupees(value: number) {

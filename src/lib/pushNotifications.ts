@@ -1,35 +1,32 @@
+
 import { Platform } from "react-native";
 import * as Device from "expo-device";
 import Constants from "expo-constants";
 import { supabase } from "./supabase";
 
-/**
- * Register this device for teacher push notifications after teacher login.
- * Expo Go on Android cannot register remote push notifications on SDK 53+,
- * so skip loading expo-notifications there to avoid native-module crashes.
- */
-export async function registerTeacherPushNotifications(): Promise<boolean> {
+export async function registerTeacherPushNotifications(
+  instituteId: string,
+): Promise<boolean> {
   try {
-    // Check Expo Go before importing expo-notifications: importing it at the
-    // top level can crash when its native module is not present in Expo Go.
+    if (!instituteId?.trim()) {
+      throw new Error("Institute ID is required.");
+    }
+
     const isExpoGo =
-      Constants.executionEnvironment === Constants.ExecutionEnvironment.StoreClient ||
+      Constants.executionEnvironment ===
+        Constants.ExecutionEnvironment.StoreClient ||
       Constants.appOwnership === "expo";
 
     if (isExpoGo) {
-      console.info(
-        "[push-notifications] Remote push registration is unavailable in Expo Go. Use a development build.",
-      );
+      console.info("[push] Remote push requires a development or production build.");
       return false;
     }
 
     if (!Device.isDevice) {
-      console.info("[push-notifications] A physical device is required for push registration.");
+      console.info("[push] A physical device is required.");
       return false;
     }
 
-    // Dynamic import prevents Expo Go from evaluating the native notification
-    // module before the environment check above.
     const Notifications = await import("expo-notifications");
 
     Notifications.setNotificationHandler({
@@ -51,11 +48,13 @@ export async function registerTeacherPushNotifications(): Promise<boolean> {
     }
 
     let permission = await Notifications.getPermissionsAsync();
+
     if (!permission.granted) {
       permission = await Notifications.requestPermissionsAsync();
     }
+
     if (!permission.granted) {
-      console.info("[push-notifications] Notification permission was not granted.");
+      console.warn("[push] Notification permission denied.");
       return false;
     }
 
@@ -64,12 +63,12 @@ export async function registerTeacherPushNotifications(): Promise<boolean> {
       Constants.expoConfig?.extra?.eas?.projectId;
 
     if (!projectId) {
-      throw new Error(
-        "Missing EAS projectId. Configure expo.extra.eas.projectId in app.json/app.config.ts.",
-      );
+      throw new Error("EAS project ID is missing.");
     }
 
-    const tokenResponse = await Notifications.getExpoPushTokenAsync({ projectId });
+    const tokenResponse =
+      await Notifications.getExpoPushTokenAsync({ projectId });
+
     const expoPushToken = tokenResponse.data;
 
     const { data, error } = await supabase.functions.invoke(
@@ -78,6 +77,7 @@ export async function registerTeacherPushNotifications(): Promise<boolean> {
         body: {
           expoPushToken,
           deviceName: Device.deviceName ?? "Android device",
+          instituteId,
         },
       },
     );
@@ -85,25 +85,27 @@ export async function registerTeacherPushNotifications(): Promise<boolean> {
     if (error) {
       const context = (error as { context?: Response }).context;
       let details = error.message;
+
       if (context) {
         try {
-          const body = await context.clone().text();
-          if (body) details = `${details}: ${body}`;
+          const responseText = await context.clone().text();
+          if (responseText) details += `: ${responseText}`;
         } catch {
-          // Keep the original Supabase function error.
+          // Retain original error.
         }
       }
+
       throw new Error(details);
     }
 
     if (!data?.success) {
-      throw new Error(data?.error ?? "Token registration was rejected.");
+      throw new Error(data?.error ?? "Token registration failed.");
     }
 
-    console.info("[push-notifications] Teacher device token registered.");
+    console.info("[push] Teacher device registered successfully.");
     return true;
   } catch (error) {
-    console.error("[push-notifications] Registration failed:", error);
+    console.error("[push] Registration failed:", error);
     return false;
   }
 }
