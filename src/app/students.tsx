@@ -13,7 +13,7 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-
+import FloatingTabBar from "../components/FloatingTabBar";
 import { supabase } from "../lib/supabase";
 import AppAlert, { type AppAlertType } from "../components/AppAlert";
 
@@ -29,8 +29,6 @@ const WHITE = "#FFFFFF";
 const TEXT = "#1F2937";
 const MUTED = "#718096";
 const BORDER = "#E8E3F5";
-
-type IconName = React.ComponentProps<typeof Feather>["name"];
 
 type Student = {
   id: string;
@@ -104,7 +102,7 @@ function StudentListSkeleton() {
 const skeletonStyles = StyleSheet.create({
   list: {
     gap: 12,
-    paddingBottom: 110,
+    paddingBottom: 160,
   },
   card: {
     backgroundColor: WHITE,
@@ -955,8 +953,11 @@ export default function StudentsScreen() {
         )}
       </View>
 
+      {/* Persistent bottom navigation: visible in loading, empty and list states */}
+      <FloatingTabBar />
+
       {/* Floating add button */}
-      {!loading && (
+      {!loading && rows.length > 0 && (
         <Pressable
           style={styles.fab}
           onPress={() => router.push("/add-students")}
@@ -1224,11 +1225,11 @@ const styles = StyleSheet.create({
   },
 
   skeletonContent: {
-    paddingBottom: 110,
+    paddingBottom: 160,
   },
 
   studentList: {
-    paddingBottom: 110,
+    paddingBottom: 160,
     gap: 12,
   },
 
@@ -1447,7 +1448,7 @@ const styles = StyleSheet.create({
   fab: {
     position: "absolute",
     right: 20,
-    bottom: 22,
+    bottom: 105,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",

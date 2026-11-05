@@ -692,7 +692,7 @@ export default function AttendanceScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: BG },
-  topPanel: { paddingHorizontal: 20, paddingBottom: 20 },
+  topPanel: { paddingHorizontal: 20, paddingBottom: 20, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
   topHeading: {
     flexDirection: "row",
     alignItems: "center",
@@ -713,7 +713,7 @@ const styles = StyleSheet.create({
   dayCell: {
     flex: 1,
     minWidth: 0,
-    height: 78,
+    height: 70,
     borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
@@ -752,7 +752,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   classFilterItem: {
-    width: "18.1%",
+    width: "20%",
     minHeight: 38,
     paddingHorizontal: 5,
     paddingVertical: 8,

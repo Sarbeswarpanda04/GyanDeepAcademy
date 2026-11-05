@@ -1,16 +1,13 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   Image,
   StatusBar,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from "react-native";
-import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useFocusEffect, router } from "expo-router";
-
+import { useFocusEffect } from "expo-router";
 import { supabase } from "../lib/supabase";
 
 const PURPLE_DARK = "#6D28D9";
@@ -26,20 +23,42 @@ type InstituteBrand = {
 
 type Props = {
   subtitle?: string;
-  showSupport?: boolean;
-  onSupportPress?: () => void;
 };
 
 export default function InstituteHeader({
   subtitle = "Institute account",
-  showSupport = true,
-  onSupportPress,
 }: Props) {
   const [brand, setBrand] = useState<InstituteBrand>({
     name: "GyanDeep Academy",
     logo_url: null,
   });
 
+  // Live clock
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  const formattedTime = currentTime.toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
+
+  const formattedDate = currentTime.toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
+  // Load institute branding
   const loadBrand = useCallback(async () => {
     try {
       const {
@@ -72,7 +91,7 @@ export default function InstituteHeader({
 
       let logoUrl: string | null = data.logo_url ?? null;
 
-      // Support both public URLs and private Storage object paths.
+      // Support public URLs and private Storage object paths.
       if (logoUrl && !/^https?:\/\//i.test(logoUrl)) {
         const { data: signedData, error: signedError } =
           await supabase.storage
@@ -100,17 +119,9 @@ export default function InstituteHeader({
     }, [loadBrand])
   );
 
-  const handleSupportPress = () => {
-    if (onSupportPress) {
-      onSupportPress();
-    } else {
-      router.push("/settings" as never);
-    }
-  };
-
   return (
     <LinearGradient
-      colors={["#611cd0", "#44109d", "#4c02f7"]}
+      colors={["#611CD0", "#44109D", "#4C02F7"]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.wrapper}
@@ -147,10 +158,7 @@ export default function InstituteHeader({
 
         {/* Institute details */}
         <View style={styles.textContainer}>
-          <Text
-            style={styles.eyebrow}
-            numberOfLines={1}
-          >
+          <Text style={styles.eyebrow} numberOfLines={1}>
             INSTITUTE PORTAL
           </Text>
 
@@ -171,22 +179,17 @@ export default function InstituteHeader({
           </View>
         </View>
 
-        {/* Support action */}
-        {showSupport && (
-          <TouchableOpacity
-            style={styles.supportButton}
-            accessibilityRole="button"
-            accessibilityLabel="Help and support"
-            activeOpacity={0.75}
-            onPress={handleSupportPress}
-          >
-            <Feather
-              name="help-circle"
-              size={23}
-              color={WHITE}
-            />
-          </TouchableOpacity>
-        )}
+        {/* Live clock and date */}
+        <View style={styles.clockContainer}>
+
+          <Text style={styles.clockTime}>
+            {formattedTime}
+          </Text>
+
+          <Text style={styles.clockDate}>
+            {formattedDate}
+          </Text>
+        </View>
       </View>
 
       <View style={styles.bottomHighlight} />
@@ -199,16 +202,16 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
 
-  container: {
-    width: "100%",
-    minHeight: 112,
-    paddingHorizontal: 18,
-    paddingTop: 36,
-    paddingBottom: 15,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 13,
-  },
+container: {
+  width: "100%",
+  minHeight: 112,
+  paddingHorizontal: 16,
+  paddingTop: 36,
+  paddingBottom: 15,
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 10,
+},
 
   logoOuter: {
     width: 60,
@@ -308,17 +311,37 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  supportButton: {
-    width: 43,
-    height: 43,
-    flexShrink: 0,
-    borderRadius: 15,
-    backgroundColor: "rgba(255,255,255,0.14)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.3)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  // Clock styles
+  clockContainer: {
+  width: 96,
+  paddingHorizontal: 5,
+  paddingVertical: 9,
+  flexShrink: 0,
+  borderRadius: 13,
+  backgroundColor: "rgba(255,255,255,0.13)",
+  borderWidth: 1,
+  borderColor: "rgba(255,255,255,0.25)",
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+clockTime: {
+  color: WHITE,
+  fontSize: 12,
+  fontWeight: "900",
+  fontVariant: ["tabular-nums"],
+  letterSpacing: 0,
+  includeFontPadding: false,
+},
+
+clockDate: {
+  color: "#E9DFFF",
+  fontSize: 8,
+  fontWeight: "600",
+  marginTop: 5,
+  textAlign: "center",
+  includeFontPadding: false,
+},
 
   bottomHighlight: {
     height: 1,
